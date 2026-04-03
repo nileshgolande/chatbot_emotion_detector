@@ -55,13 +55,17 @@ def _map_label_to_bucket(label: str) -> str:
 def _keyword_scores(text: str) -> dict[str, float]:
     t = text.lower()
     scores = {e: 0.2 for e in EMOTIONS}
-    if re.search(r"\b(happy|glad|great|love|thanks|awesome)\b", t):
+    # Positive tone.
+    if re.search(r"\b(happy|glad|great|love|thanks|awesome|grateful)\b", t):
         scores["happy"] = 0.55
-    if re.search(r"\b(sad|depressed|cry|lonely|hurt)\b", t):
+    # Sad / low mood.
+    if re.search(r"\b(sad|depressed|cry|lonely|hurt|empty|down)\b", t):
         scores["sad"] = 0.55
-    if re.search(r"\b(anxious|worried|stress|nervous|panic)\b", t):
+    # Anxious / stressed.
+    if re.search(r"\b(anxious|worried|stress|stressed|nervous|panic|overwhelmed?)\b", t):
         scores["anxious"] = 0.55
-    if re.search(r"\b(angry|furious|hate|mad)\b", t):
+    # Angry / frustrated.
+    if re.search(r"\b(angry|furious|hate|mad|irritated?|annoyed?)\b", t) or "frustrat" in t:
         scores["angry"] = 0.55
     if max(scores.values()) <= 0.2:
         scores["neutral"] = 0.5

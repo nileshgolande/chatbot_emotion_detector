@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   Area,
   Bar,
@@ -17,6 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import Navbar from "../components/Navbar";
+import Sidebar from "../components/Sidebar";
 import api from "../services/api";
 import { useTheme } from "../hooks/useTheme";
 import {
@@ -145,9 +145,11 @@ export default function DashboardPage() {
   const pieTotal = pieData.reduce((a, b) => a + b.value, 0);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-wa-bg dark:text-emerald-50">
+    <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-wa-bg dark:text-emerald-50">
       <Navbar />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+      <div className="flex min-h-0 flex-1">
+        <Sidebar />
+        <main className="mx-auto min-h-0 min-w-0 w-full max-w-6xl flex-1 overflow-y-auto overscroll-contain px-4 py-8">
         <h1 className="mb-2 text-2xl font-semibold">Mood dashboard</h1>
         <p className="mb-6 text-sm text-wa-muted">
           Charts match your emotion model: green happy, blue sad, orange anxious, red angry, slate neutral.
@@ -438,10 +440,8 @@ export default function DashboardPage() {
           </p>
         )}
 
-        <Link to="/chat" className="text-wa-accent underline">
-          Back to chat
-        </Link>
       </main>
+      </div>
     </div>
   );
 }

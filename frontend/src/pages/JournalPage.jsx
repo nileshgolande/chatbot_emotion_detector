@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import Sidebar from "../components/Sidebar";
 import api from "../services/api";
 
 const MOODS = ["happy", "sad", "anxious", "angry", "neutral"];
@@ -71,9 +71,11 @@ export default function JournalPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 dark:bg-wa-bg dark:text-emerald-50">
+    <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-wa-bg dark:text-emerald-50">
       <Navbar />
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
+      <div className="flex min-h-0 flex-1">
+        <Sidebar />
+        <main className="mx-auto min-h-0 min-w-0 w-full max-w-2xl flex-1 overflow-y-auto overscroll-contain px-4 py-8">
         <h1 className="mb-4 text-2xl font-semibold">Journal</h1>
         <p className="mb-6 text-sm text-wa-muted">
           Private entries stored via <code className="rounded bg-wa-bar px-1">/api/journal/entries/</code>.
@@ -164,12 +166,8 @@ export default function JournalPage() {
           ))}
         </ul>
 
-        <p className="mt-8">
-          <Link to="/chat" className="text-wa-accent underline">
-            Back to chat
-          </Link>
-        </p>
       </main>
+      </div>
     </div>
   );
 }

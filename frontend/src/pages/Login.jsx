@@ -2,19 +2,13 @@ import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
-/**
- * @param {boolean} [embedded]
- * @param {() => void} [onAuthenticated]
- * @param {() => void} [onSwitchToRegister]
- * @param {() => void} [onBack]
- */
 export default function Login({
   embedded = false,
   onAuthenticated,
   onSwitchToRegister,
   onBack,
 } = {}) {
-  const { login, enableDemoUser } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/chat";
@@ -57,15 +51,6 @@ export default function Login({
   const handleForward = () => {
     if (onSwitchToRegister) onSwitchToRegister();
     else navigate("/register");
-  };
-
-  const goDemo = () => {
-    enableDemoUser();
-    if (onAuthenticated) {
-      onAuthenticated();
-      return;
-    }
-    navigate(from, { replace: true });
   };
 
   const form = (
@@ -129,15 +114,6 @@ export default function Login({
       >
         {submitting ? "Signing in…" : "Sign in"}
       </button>
-      {!embedded && (
-        <button
-          type="button"
-          onClick={goDemo}
-          className="w-full rounded-lg border border-wa-bar py-2 text-sm font-medium text-wa-accent"
-        >
-          Continue in demo mode (UI only)
-        </button>
-      )}
       <p className="text-center text-xs text-wa-muted">
         No account?{" "}
         {onSwitchToRegister ? (

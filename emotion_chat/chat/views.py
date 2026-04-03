@@ -96,7 +96,18 @@ class ConversationViewSet(
             )
             update_daily_mood(request.user)
 
-            reply = get_llm_response(content, analysis.get("primary_emotion"))
+            # Build short history window (last 5 messages before this one).
+            prior = list(
+                conv.messages.exclude(pk=user_msg.pk)
+                .order_by("-created_at")[:5]
+            )
+            prior.reverse()
+
+            reply = get_llm_response(
+                content,
+                analysis.get("primary_emotion"),
+                history=prior,
+            )
             Message.objects.create(conversation=conv, sender="bot", content=reply)
 
             msgs = conv.messages.select_related("emotion").all()
