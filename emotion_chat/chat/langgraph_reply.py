@@ -1,13 +1,25 @@
 """
 LangGraph pipeline: prepare prompt → invoke LLM → guarantee non-empty empathic reply.
-Graph is compiled once per process for lower overhead on hot paths.
+Graph is compiled once per process; LangChain chat clients are reused per API key to cut latency.
 """
 from __future__ import annotations
 
 import logging
-from typing import TypedDict
+import os
+from typing import Any, TypedDict
 
 logger = logging.getLogger(__name__)
+
+# Reuse LangChain clients (constructing them on every message is slow).
+_gemini_lc_by_key: dict[str, Any] = {}
+_openai_lc_by_key: dict[str, Any] = {}
+
+_LANGGRAPH_MAX_OUT = int(os.environ.get("LANGGRAPH_MAX_OUTPUT_TOKENS", "512"))
+_LANGGRAPH_GEMINI_MODEL = os.environ.get("LANGGRAPH_GEMINI_MODEL", "gemini-2.0-flash").strip()
+_LANGGRAPH_OPENAI_MODEL = os.environ.get("LANGGRAPH_OPENAI_MODEL", "gpt-4o-mini").strip()
+# Bound prompt size to reduce tokens and API latency.
+_MAX_SYSTEM_CHARS = int(os.environ.get("LANGGRAPH_MAX_SYSTEM_CHARS", "12000"))
+_MAX_USER_CHARS = int(os.environ.get("LANGGRAPH_MAX_USER_CHARS", "6000"))
 
 try:
     from langgraph.graph import END, START, StateGraph
@@ -38,23 +50,46 @@ def _compose(state: ChatGraphState) -> dict:
     return {"system_prompt": system_prompt}
 
 
+def _cached_gemini_lc(key: str):
+    if key not in _gemini_lc_by_key:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        _gemini_lc_by_key[key] = ChatGoogleGenerativeAI(
+            model=_LANGGRAPH_GEMINI_MODEL,
+            google_api_key=key,
+            temperature=0.72,
+            max_output_tokens=_LANGGRAPH_MAX_OUT,
+        )
+    return _gemini_lc_by_key[key]
+
+
+def _cached_openai_lc(key: str):
+    if key not in _openai_lc_by_key:
+        from langchain_openai import ChatOpenAI
+
+        _openai_lc_by_key[key] = ChatOpenAI(
+            model=_LANGGRAPH_OPENAI_MODEL,
+            api_key=key,
+            temperature=0.72,
+            max_tokens=_LANGGRAPH_MAX_OUT,
+        )
+    return _openai_lc_by_key[key]
+
+
 def _llm(state: ChatGraphState) -> dict:
-    user_text = state.get("user_message") or ""
-    system_prompt = state.get("system_prompt") or ""
+    user_text = (state.get("user_message") or "")[:_MAX_USER_CHARS]
+    system_prompt = (state.get("system_prompt") or "")[:_MAX_SYSTEM_CHARS]
     key_g = (state.get("gemini_key") or "").strip()
     key_o = (state.get("openai_key") or "").strip()
+
+    if not key_g and not key_o:
+        return {"reply": ""}
 
     if key_g:
         try:
             from langchain_core.messages import HumanMessage, SystemMessage
-            from langchain_google_genai import ChatGoogleGenerativeAI
 
-            llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
-                google_api_key=key_g,
-                temperature=0.72,
-                max_output_tokens=1024,
-            )
+            llm = _cached_gemini_lc(key_g)
             out = llm.invoke(
                 [
                     SystemMessage(content=system_prompt),
@@ -70,9 +105,8 @@ def _llm(state: ChatGraphState) -> dict:
     if key_o:
         try:
             from langchain_core.messages import HumanMessage, SystemMessage
-            from langchain_openai import ChatOpenAI
 
-            llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.72, max_tokens=1024)
+            llm = _cached_openai_lc(key_o)
             out = llm.invoke(
                 [
                     SystemMessage(content=system_prompt),

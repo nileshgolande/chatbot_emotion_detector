@@ -14,6 +14,8 @@ from typing import Any
 import requests
 from dotenv import load_dotenv
 
+from chat.empathy_prompts import build_chat_system_prompt
+
 # project root: emotion_chat/ (same folder as manage.py and .env)
 _SERVICE_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(_SERVICE_ROOT / ".env")
@@ -22,6 +24,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = int(os.environ.get("LLM_HTTP_TIMEOUT", "20"))
+# Room for empathy-first system prompt + last turns + user (default was 6000; prompt grew).
+LLM_MAX_CONTEXT_CHARS = int(os.environ.get("LLM_MAX_CONTEXT_CHARS", "10000"))
 
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -44,34 +48,34 @@ OPENROUTER_MODELS = [
     if m.strip()
 ]
 
-SYSTEM_PROMPT = """You are an emotion-aware conversational assistant. You recognize and respond appropriately when the user seems happy, sad, angry, or anxious—acknowledge feelings without being patronizing.
-
-Tone: warm, friendly, and human-like. Keep replies concise but meaningful. For technical or factual questions, give structured, clear answers (short paragraphs or bullet points when helpful).
-
-Stay helpful and safe; do not claim to be human.
-
-Do not include meta commentary like "(You shared: ...)" or other "you shared" summaries. Reply directly as the assistant."""
+# Short, human-like replies; raise via CHAT_MAX_TOKENS or OPENROUTER_MAX_TOKENS if needed.
+CHAT_MAX_TOKENS = int(
+    os.environ.get("CHAT_MAX_TOKENS")
+    or os.environ.get("OPENROUTER_MAX_TOKENS")
+    or "220"
+)
+OPENROUTER_MAX_TOKENS = CHAT_MAX_TOKENS
 
 EMOTION_FALLBACK_MESSAGES: dict[str, str] = {
     "happy": (
-        "I'm so glad to hear that! My system is having a quick hiccup, "
-        "but I’m definitely sharing in your good vibes right now."
+        "💛✨ I’m so happy you shared that — I’m getting a small technical hiccup on my side, "
+        "but I’m right here cheering you on and soaking up your good energy. 🌟🤗"
     ),
     "sad": (
-        "I’m really sorry you’re feeling this way. I’m having a little trouble "
-        "processing my next thought, but I’m here with you."
+        "🫂💙 I’m really sorry things feel heavy right now. I hit a brief snag replying, "
+        "but you’re not alone in this moment — I’m with you. 🌙💜"
     ),
     "anxious": (
-        "I can tell things feel a bit much right now. I’m experiencing a small "
-        "technical lag, but let’s take a breath while I get back on track."
+        "🌿🫧 I can tell it’s a lot right now. I had a tiny delay on my end—want to take one slow breath "
+        "together while I catch up? I’ve got you. 🌊✨"
     ),
     "angry": (
-        "I hear your frustration, and I’m sorry if I’m adding to it with a "
-        "technical delay. I'm trying my best to reconnect so we can work through this."
+        "🕊️💬 I hear your frustration, and it makes sense. I’m sorry a technical delay piled on—I’m "
+        "working to get back so we can talk it through properly. 🙏🌱"
     ),
     "neutral": (
-        "I've noted that. My connection is a bit spotty at the moment, "
-        "but I'm still tuned into what you're saying."
+        "💬🌤️ I’m here and I’m listening. Connection flickered for a second, but what you said still "
+        "matters to me—thanks for your patience. ✨💛"
     ),
 }
 
@@ -203,15 +207,16 @@ def _build_chat_messages(
     """
     msgs: list[dict[str, str]] = []
     total_chars = 0
+    cap = LLM_MAX_CONTEXT_CHARS
 
     def _add(role: str, content: str) -> None:
         nonlocal total_chars
         if not content:
             return
-        if total_chars >= 6000:
+        if total_chars >= cap:
             return
         # Hard cap each segment and overall length.
-        allowed = 6000 - total_chars
+        allowed = cap - total_chars
         snippet = content[: allowed]
         if not snippet:
             return
@@ -238,9 +243,18 @@ def _build_chat_messages(
     return msgs
 
 
-def _call_gemini_one_model(prompt: str, model_id: str, api_key: str) -> str | None:
+def _call_gemini_one_model(
+    prompt: str,
+    model_id: str,
+    api_key: str,
+    max_output_tokens: int | None = None,
+) -> str | None:
+    cap = max_output_tokens if max_output_tokens is not None else CHAT_MAX_TOKENS
     # Gemini expects a "contents" list with role + parts.
-    payload: dict[str, Any] = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
+    payload: dict[str, Any] = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": max(64, min(cap, 1024))},
+    }
 
     for api_version in GEMINI_API_VERSIONS:
         url = (
@@ -301,7 +315,7 @@ def _call_gemini_one_model(prompt: str, model_id: str, api_key: str) -> str | No
     return None
 
 
-def call_gemini(prompt: str) -> str | None:
+def call_gemini(prompt: str, max_output_tokens: int | None = None) -> str | None:
     """Call Google Gemini REST API; try each GEMINI_MODEL candidate until one works."""
     api_key = gemini_api_key()
     if not api_key:
@@ -313,7 +327,7 @@ def call_gemini(prompt: str) -> str | None:
     models = gemini_model_candidates()
     print(f"[LLM] Gemini models to try: {', '.join(models)}")
     for mid in models:
-        out = _call_gemini_one_model(prompt, mid, api_key)
+        out = _call_gemini_one_model(prompt, mid, api_key, max_output_tokens)
         if out:
             return out
     return None
@@ -330,6 +344,7 @@ def call_groq(prompt: str) -> str | None:
     body = {
         "model": GROQ_MODEL,
         "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": CHAT_MAX_TOKENS,
     }
     headers = {
         "Authorization": f"Bearer {key}",
@@ -379,7 +394,7 @@ def call_openrouter_chat(messages: list[dict[str, str]]) -> str | None:
     OpenRouter chat completions (free-tier models) with multi-model fallback.
     - messages: OpenAI-style chat messages, already trimmed.
     - Tries each model in OPENROUTER_MODELS in order.
-    - max_tokens capped to 300 to avoid long responses.
+    - max_tokens from CHAT_MAX_TOKENS (default 220; env CHAT_MAX_TOKENS or OPENROUTER_MAX_TOKENS).
     """
     key = openrouter_api_key()
     if not key:
@@ -397,7 +412,7 @@ def call_openrouter_chat(messages: list[dict[str, str]]) -> str | None:
         body = {
             "model": model_id,
             "messages": messages,
-            "max_tokens": 300,
+            "max_tokens": OPENROUTER_MAX_TOKENS,
         }
         try:
             r = requests.post(
@@ -460,13 +475,14 @@ def get_llm_response(
 
     # Trim raw text defensively.
     text = text[:6000]
-    final_prompt = SYSTEM_PROMPT + "\nUser: " + text
+    system_prompt = build_chat_system_prompt(primary_emotion)
+    final_prompt = system_prompt + "\n\nUser:\n" + text
 
     # Primary path: OpenRouter free models with chat history.
     try:
-        chat_messages = _build_chat_messages(text, history, SYSTEM_PROMPT)
+        chat_messages = _build_chat_messages(text, history, system_prompt)
     except Exception:
-        chat_messages = _build_chat_messages(text, None, SYSTEM_PROMPT)
+        chat_messages = _build_chat_messages(text, None, system_prompt)
 
     logger.info("LLM pipeline: trying OpenRouter free models first")
     print("[LLM] Using API: OpenRouter (multi-model)")

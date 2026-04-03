@@ -9,6 +9,26 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+_JOURNAL_GEMINI_MODEL = os.environ.get("JOURNAL_GEMINI_MODEL", "gemini-2.0-flash").strip()
+_JOURNAL_MAX_OUT = int(os.environ.get("JOURNAL_MAX_OUTPUT_TOKENS", "512"))
+# Reuse chat client per (api_key, temperature) — constructing LangChain LLMs per request is slow.
+_journal_llm_cache: dict[tuple[str, float], Any] = {}
+
+
+def _journal_llm(key: str, temperature: float):
+    t = round(float(temperature), 2)
+    cache_key = (key, t)
+    if cache_key not in _journal_llm_cache:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        _journal_llm_cache[cache_key] = ChatGoogleGenerativeAI(
+            model=_JOURNAL_GEMINI_MODEL,
+            google_api_key=key,
+            temperature=t,
+            max_output_tokens=_JOURNAL_MAX_OUT,
+        )
+    return _journal_llm_cache[cache_key]
+
 
 def _gemini_key() -> str:
     return (
@@ -35,13 +55,8 @@ class JournalAIInsights:
             )
         try:
             from langchain_core.messages import HumanMessage
-            from langchain_google_genai import ChatGoogleGenerativeAI
 
-            llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
-                google_api_key=key,
-                temperature=0.55,
-            )
+            llm = _journal_llm(key, 0.55)
             out = llm.invoke([HumanMessage(content=prompt)])
             return (out.content or "").strip()[:4000]
         except Exception as e:
@@ -69,13 +84,8 @@ class JournalAIInsights:
             }
         try:
             from langchain_core.messages import HumanMessage
-            from langchain_google_genai import ChatGoogleGenerativeAI
 
-            llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
-                google_api_key=key,
-                temperature=0.5,
-            )
+            llm = _journal_llm(key, 0.5)
             out = llm.invoke([HumanMessage(content=prompt)])
             text = (out.content or "").strip()
             parts = text.split("\n\n", 1)

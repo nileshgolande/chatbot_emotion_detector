@@ -7,7 +7,8 @@ from typing import Any
 from .langgraph_reply import run_empathy_graph
 
 
-def _build_context(conversation_history: list[Any] | None, limit: int = 8) -> str:
+def _build_context(conversation_history: list[Any] | None, limit: int = 6) -> str:
+    """Compact recent turns to keep LangGraph prompts small (faster API + lower cost)."""
     if not conversation_history:
         return ""
     tail = (
@@ -15,14 +16,15 @@ def _build_context(conversation_history: list[Any] | None, limit: int = 8) -> st
         if len(conversation_history) > limit
         else conversation_history
     )
+    max_line = 400
     lines = []
     for m in tail:
         if hasattr(m, "sender") and hasattr(m, "content"):
             role = "User" if m.sender == "user" else "Assistant"
-            lines.append(f"{role}: {m.content[:500]}")
+            lines.append(f"{role}: {m.content[:max_line]}")
         elif isinstance(m, dict):
             role = "User" if m.get("sender") == "user" else "Assistant"
-            lines.append(f"{role}: {str(m.get('content', ''))[:500]}")
+            lines.append(f"{role}: {str(m.get('content', ''))[:max_line]}")
     return "\n".join(lines)
 
 
@@ -63,7 +65,7 @@ class AIResponseGenerator:
         primary = emotion.get("primary_emotion") or "neutral"
         stage = relationship_stage or emotion.get("relationship_stage") or "stranger"
         history = conversation_history or []
-        hist_block = _build_context(history, limit=8)
+        hist_block = _build_context(history, limit=6)
         return run_empathy_graph(
             (user_message or "").strip(),
             primary,

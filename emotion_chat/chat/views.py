@@ -36,7 +36,10 @@ def llm_response_view(request):
         ).strip()
     if not user_input:
         return Response({"detail": "message required"}, status=status.HTTP_400_BAD_REQUEST)
-    return Response({"response": get_llm_response(user_input)})
+    analysis = emotion_detector.detect_emotion(user_input)
+    return Response(
+        {"response": get_llm_response(user_input, analysis.get("primary_emotion"))}
+    )
 
 
 class ConversationViewSet(
