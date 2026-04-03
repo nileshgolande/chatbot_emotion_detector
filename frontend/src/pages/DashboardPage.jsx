@@ -8,8 +8,10 @@ import {
   ComposedChart,
   Legend,
   Line,
+  LineChart,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -30,6 +32,22 @@ import {
   toPieData,
   toStackedTrendData,
 } from "../data/emotionChartTheme";
+
+function TimelineMoodDot(props) {
+  const { cx, cy, payload, isDark } = props;
+  if (cx == null || cy == null || !payload) return null;
+  const c = EMOTION_COLORS[payload.emotion] || EMOTION_COLORS.neutral;
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={3}
+      fill={c}
+      stroke={isDark ? "#0f172a" : "#ffffff"}
+      strokeWidth={1}
+    />
+  );
+}
 
 function MoodLineDot(props) {
   const { cx, cy, payload, isDark } = props;
@@ -93,6 +111,7 @@ export default function DashboardPage() {
 
   const [stats, setStats] = useState(null);
   const [trend, setTrend] = useState(null);
+  const [moodTimeline, setMoodTimeline] = useState(null);
   const [weekly, setWeekly] = useState(null);
   const [monthly, setMonthly] = useState(null);
   const [error, setError] = useState(null);
@@ -104,15 +123,17 @@ export default function DashboardPage() {
       setError(null);
       setLoading(true);
       try {
-        const [s, t, w, m] = await Promise.all([
+        const [s, t, tl, w, m] = await Promise.all([
           api.get("/api/dashboard/emotion_stats/"),
           api.get("/api/dashboard/mood_trend/?days=30"),
+          api.get("/api/dashboard/mood_timeline/"),
           api.get("/api/dashboard/weekly_report/"),
           api.get("/api/dashboard/monthly_report/"),
         ]);
         if (!cancelled) {
           setStats(s.data);
           setTrend(t.data);
+          setMoodTimeline(tl.data);
           setWeekly(w.data);
           setMonthly(m.data);
         }
@@ -141,6 +162,27 @@ export default function DashboardPage() {
 
   const weeklyBars = useMemo(() => toHorizontalBarData(weekly?.by_emotion), [weekly]);
   const monthlyBars = useMemo(() => toHorizontalBarData(monthly?.by_emotion), [monthly]);
+
+  const timelineData = useMemo(() => {
+    const pts = moodTimeline?.points;
+    if (!Array.isArray(pts) || pts.length === 0) return [];
+    const window = 5;
+    return pts.map((p, i) => {
+      const a = Math.max(0, i - Math.floor(window / 2));
+      const b = Math.min(pts.length, i + Math.ceil(window / 2));
+      const slice = pts.slice(a, b);
+      const mood_smooth =
+        slice.reduce((sum, x) => sum + (Number(x.mood_score) || 0), 0) / slice.length;
+      return {
+        ...p,
+        mood_smooth,
+        confidencePct: p.confidence != null ? Math.round(Number(p.confidence) * 100) : null,
+        atShort: typeof p.at === "string" ? p.at.replace("T", " ").slice(0, 16) : "",
+      };
+    });
+  }, [moodTimeline]);
+
+  const timelineShowDots = timelineData.length > 0 && timelineData.length <= 120;
 
   const pieTotal = pieData.reduce((a, b) => a + b.value, 0);
 
@@ -177,6 +219,117 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
+        )}
+
+        {!loading && !error && timelineData.length > 0 && (
+          <section className="mb-10 rounded-2xl border border-wa-bar bg-wa-panel p-5 shadow-sm">
+            <h2 className="mb-1 text-lg font-semibold">Mood trend (all chat history)</h2>
+            <p className="mb-1 text-xs text-wa-muted">
+              Each point is one analyzed user message in time order. Y-axis is a simple valence score: higher is
+              happier/lighter, lower is sadder or more tense (happy +2 → sad −1.5). The teal line is a light moving
+              average so you see the overall trend; hover for the exact mood label.
+            </p>
+            {moodTimeline?.truncated ? (
+              <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
+                Showing the most recent {moodTimeline.returned} messages (limit {moodTimeline.limit}). Total in
+                history: {moodTimeline.total_in_db}.
+              </p>
+            ) : (
+              <p className="mb-4 text-xs text-wa-muted">
+                {moodTimeline?.returned} messages · full history loaded
+              </p>
+            )}
+            <div className="h-80 w-full min-h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={timelineData} margin={{ top: 8, right: 12, left: 4, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={grid} />
+                  <XAxis
+                    dataKey="i"
+                    type="number"
+                    domain={["dataMin", "dataMax"]}
+                    {...axis}
+                    tickMargin={8}
+                    interval="preserveStartEnd"
+                    label={{
+                      value: "Message order (oldest → newest)",
+                      position: "insideBottom",
+                      offset: -4,
+                      fill: axis.tick.fill,
+                      fontSize: 11,
+                    }}
+                  />
+                  <YAxis
+                    domain={[-2.2, 2.2]}
+                    {...axis}
+                    tickMargin={8}
+                    label={{
+                      value: "Mood valence",
+                      angle: -90,
+                      position: "insideLeft",
+                      fill: axis.tick.fill,
+                      fontSize: 11,
+                    }}
+                  />
+                  <Tooltip
+                    content={({ active, label, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const row = payload[0]?.payload;
+                      return (
+                        <div className="max-w-xs rounded-lg border border-wa-bar bg-wa-panel px-3 py-2 text-xs shadow-lg">
+                          <p className="font-medium text-slate-900 dark:text-emerald-50">
+                            #{row?.i} · {row?.atShort || label}
+                          </p>
+                          <p className="capitalize text-wa-muted">
+                            Mood:{" "}
+                            <strong style={{ color: EMOTION_COLORS[row?.emotion] }}>{row?.emotion}</strong>
+                          </p>
+                          <p className="text-wa-muted">
+                            Valence:{" "}
+                            <strong className="text-slate-900 dark:text-emerald-50">
+                              {row?.mood_score != null ? Number(row.mood_score).toFixed(2) : "—"}
+                            </strong>
+                          </p>
+                          {row?.confidencePct != null && (
+                            <p className="text-wa-muted">Confidence: {row.confidencePct}%</p>
+                          )}
+                        </div>
+                      );
+                    }}
+                  />
+                  <ReferenceLine
+                    y={0}
+                    stroke={isDark ? "#64748b" : "#94a3b8"}
+                    strokeDasharray="4 4"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="mood_score"
+                    name="Per message"
+                    stroke="#94a3b8"
+                    strokeWidth={1}
+                    strokeOpacity={0.45}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="mood_smooth"
+                    name="Trend (5-msg avg)"
+                    stroke="#0d9488"
+                    strokeWidth={2.5}
+                    dot={
+                      timelineShowDots
+                        ? (props) => <TimelineMoodDot {...props} isDark={isDark} />
+                        : false
+                    }
+                    activeDot={{ r: 6 }}
+                    isAnimationActive={false}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: 8 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
         )}
 
         {!loading && !error && pieTotal > 0 && (

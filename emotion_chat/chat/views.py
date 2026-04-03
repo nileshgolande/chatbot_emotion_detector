@@ -1,6 +1,8 @@
 import logging
+import threading
 
 from django.conf import settings
+from django.db import transaction
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -97,7 +99,18 @@ class ConversationViewSet(
                 emotion_vector=analysis["emotion_vector"],
                 confidence=analysis["confidence"],
             )
-            update_daily_mood(request.user)
+
+            u = request.user
+
+            def _refresh_daily_mood():
+                try:
+                    update_daily_mood(u)
+                except Exception:
+                    logger.exception("update_daily_mood (background)")
+
+            transaction.on_commit(
+                lambda: threading.Thread(target=_refresh_daily_mood, daemon=True).start()
+            )
 
             # Build short history window (last 5 messages before this one).
             prior = list(

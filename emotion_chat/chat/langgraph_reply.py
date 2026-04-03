@@ -15,7 +15,7 @@ _gemini_lc_by_key: dict[str, Any] = {}
 _openai_lc_by_key: dict[str, Any] = {}
 
 _LANGGRAPH_MAX_OUT = int(os.environ.get("LANGGRAPH_MAX_OUTPUT_TOKENS", "512"))
-_LANGGRAPH_GEMINI_MODEL = os.environ.get("LANGGRAPH_GEMINI_MODEL", "gemini-2.0-flash").strip()
+_LANGGRAPH_GEMINI_MODEL = os.environ.get("LANGGRAPH_GEMINI_MODEL", "gemini-2.5-flash").strip()
 _LANGGRAPH_OPENAI_MODEL = os.environ.get("LANGGRAPH_OPENAI_MODEL", "gpt-4o-mini").strip()
 # Bound prompt size to reduce tokens and API latency.
 _MAX_SYSTEM_CHARS = int(os.environ.get("LANGGRAPH_MAX_SYSTEM_CHARS", "12000"))
@@ -123,15 +123,24 @@ def _llm(state: ChatGraphState) -> dict:
 
 
 def _finalize(state: ChatGraphState) -> dict:
-    from .empathy_prompts import fallback_reply_empathic
+    from .empathy_prompts import (
+        emotion_lead_pair,
+        fallback_reply_empathic,
+        text_contains_emoji,
+    )
 
     existing = (state.get("reply") or "").strip()
+    mood = state.get("primary_emotion") or "neutral"
     if existing:
+        # Graph instruction asks for mood emojis; if the model skipped them, prepend a mood pair.
+        if not text_contains_emoji(existing):
+            lead = emotion_lead_pair(mood)
+            return {"reply": f"{lead} {existing}".strip()}
         return {}
     return {
         "reply": fallback_reply_empathic(
             state.get("user_message") or "",
-            state.get("primary_emotion") or "neutral",
+            mood,
             state.get("relationship_stage") or "stranger",
         )
     }

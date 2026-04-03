@@ -23,7 +23,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-REQUEST_TIMEOUT = int(os.environ.get("LLM_HTTP_TIMEOUT", "20"))
+REQUEST_TIMEOUT = int(os.environ.get("LLM_HTTP_TIMEOUT", "12"))
 # Room for empathy-first system prompt + last turns + user (default was 6000; prompt grew).
 LLM_MAX_CONTEXT_CHARS = int(os.environ.get("LLM_MAX_CONTEXT_CHARS", "10000"))
 
@@ -33,16 +33,14 @@ OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 # llama3-70b-8192 was retired on Groq; use current production id.
 GROQ_MODEL = (os.environ.get("GROQ_MODEL") or "llama-3.3-70b-versatile").strip()
 
-# OpenRouter: preferred free models, in priority order.
+# OpenRouter: fewer defaults = faster failover (extend via OPENROUTER_MODELS in .env).
 OPENROUTER_MODELS = [
     m.strip()
     for m in os.environ.get(
         "OPENROUTER_MODELS",
         (
             "meta-llama/llama-3.1-8b-instruct:free,"
-            "meta-llama/llama-3-8b-instruct:free,"
-            "google/gemma-3-4b-it:free,"
-            "microsoft/phi-3-mini-128k-instruct:free"
+            "google/gemma-3-4b-it:free"
         ),
     ).split(",")
     if m.strip()
@@ -52,9 +50,13 @@ OPENROUTER_MODELS = [
 CHAT_MAX_TOKENS = int(
     os.environ.get("CHAT_MAX_TOKENS")
     or os.environ.get("OPENROUTER_MAX_TOKENS")
-    or "220"
+    or "180"
 )
 OPENROUTER_MAX_TOKENS = CHAT_MAX_TOKENS
+
+# Provider order for chat (first successful response wins). Groq is usually lowest latency.
+_LLM_ORDER_RAW = os.environ.get("LLM_ORDER", "groq,openrouter,gemini")
+LLM_ORDER = [p.strip().lower() for p in _LLM_ORDER_RAW.split(",") if p.strip()]
 
 EMOTION_FALLBACK_MESSAGES: dict[str, str] = {
     "happy": (
@@ -81,7 +83,7 @@ EMOTION_FALLBACK_MESSAGES: dict[str, str] = {
 
 GEMINI_API_VERSIONS = [
     v.strip()
-    for v in os.environ.get("GEMINI_API_VERSIONS", "v1beta,v1").split(",")
+    for v in os.environ.get("GEMINI_API_VERSIONS", "v1,v1beta").split(",")
     if v.strip()
 ]
 
@@ -135,11 +137,16 @@ def openrouter_api_key() -> str:
 def gemini_model_candidates() -> list[str]:
     """
     GEMINI_MODEL may be one id or comma-separated fallbacks, e.g.
-    gemini-2.0-flash,gemini-1.5-flash
+    gemini-2.5-flash,gemini-2.0-flash,gemini-1.5-flash
     (A single string like "a,b,c" must NOT be sent as one model name to the API.)
     """
     raw = _strip_env_value(os.environ.get("GEMINI_MODEL")) or (
-        "gemini-2.0-flash,gemini-1.5-flash"
+        "gemini-2.5-flash,"
+        "gemini-2.0-flash,"
+        "gemini-2.0-flash-001,"
+        "gemini-1.5-flash,"
+        "gemini-1.5-flash-8b,"
+        "gemini-1.5-pro"
     )
     parts = [p.strip() for p in raw.split(",") if p.strip()]
     # Allow only safe model id characters
@@ -148,7 +155,12 @@ def gemini_model_candidates() -> list[str]:
         m = m.strip()
         if m and re.match(r"^[\w.\-]+$", m):
             out.append(m)
-    return out or ["gemini-2.0-flash", "gemini-1.5-flash"]
+    return out or [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+    ]
 
 
 def _safe_json(resp: requests.Response) -> Any | None:
@@ -296,7 +308,17 @@ def _call_gemini_one_model(
         try:
             candidates = data.get("candidates") or []
             if not candidates:
-                print(f"[LLM] Gemini failure ({model_id}): no candidates in response")
+                fb = data.get("promptFeedback") or data.get("error")
+                if fb:
+                    logger.warning(
+                        "Gemini no candidates (%s, %s): %s",
+                        model_id,
+                        api_version,
+                        fb,
+                    )
+                    print(f"[LLM] Gemini ({model_id}): no candidates — {fb}")
+                else:
+                    print(f"[LLM] Gemini failure ({model_id}): no candidates in response")
                 continue
             parts = (candidates[0].get("content") or {}).get("parts") or []
             if not parts:
@@ -333,8 +355,8 @@ def call_gemini(prompt: str, max_output_tokens: int | None = None) -> str | None
     return None
 
 
-def call_groq(prompt: str) -> str | None:
-    """Groq OpenAI-compatible chat completions; return text or None."""
+def call_groq_chat(messages: list[dict[str, str]]) -> str | None:
+    """Groq OpenAI-compatible chat completions with full message history."""
     key = groq_api_key()
     if not key:
         msg = "GROQ_API_KEY not set"
@@ -343,8 +365,9 @@ def call_groq(prompt: str) -> str | None:
         return None
     body = {
         "model": GROQ_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
         "max_tokens": CHAT_MAX_TOKENS,
+        "temperature": float(os.environ.get("GROQ_TEMPERATURE", "0.45")),
     }
     headers = {
         "Authorization": f"Bearer {key}",
@@ -389,6 +412,11 @@ def call_groq(prompt: str) -> str | None:
     return None
 
 
+def call_groq(prompt: str) -> str | None:
+    """Single user-message convenience wrapper."""
+    return call_groq_chat([{"role": "user", "content": prompt}])
+
+
 def call_openrouter_chat(messages: list[dict[str, str]]) -> str | None:
     """
     OpenRouter chat completions (free-tier models) with multi-model fallback.
@@ -413,6 +441,7 @@ def call_openrouter_chat(messages: list[dict[str, str]]) -> str | None:
             "model": model_id,
             "messages": messages,
             "max_tokens": OPENROUTER_MAX_TOKENS,
+            "temperature": float(os.environ.get("OPENROUTER_TEMPERATURE", "0.45")),
         }
         try:
             r = requests.post(
@@ -466,8 +495,8 @@ def get_llm_response(
     history: list[Any] | None = None,
 ) -> str:
     """
-    Build prompt with SYSTEM_PROMPT, try Gemini (retry = second full pass), then Groq, then OpenRouter.
-    Returns first non-empty model text, or emotion-specific fallback if all fail.
+    Build chat prompt; try providers in LLM_ORDER (default: Groq → OpenRouter → Gemini).
+    One call per provider where applicable (no duplicate Gemini retries).
     """
     text = (user_input or "").strip()
     if not text:
@@ -478,38 +507,33 @@ def get_llm_response(
     system_prompt = build_chat_system_prompt(primary_emotion)
     final_prompt = system_prompt + "\n\nUser:\n" + text
 
-    # Primary path: OpenRouter free models with chat history.
     try:
         chat_messages = _build_chat_messages(text, history, system_prompt)
     except Exception:
         chat_messages = _build_chat_messages(text, None, system_prompt)
 
-    logger.info("LLM pipeline: trying OpenRouter free models first")
-    print("[LLM] Using API: OpenRouter (multi-model)")
-    out = call_openrouter_chat(chat_messages)
-    if out:
-        return _sanitize_llm_text(out)
-
-    # Fallback: Gemini (if configured), then Groq.
-    logger.info("LLM pipeline: OpenRouter failed; trying Gemini")
-    print("[LLM] Fallback: switching to Gemini (attempt 1)")
-    out = call_gemini(final_prompt)
-    if out:
-        return _sanitize_llm_text(out)
-
-    logger.warning("LLM: Gemini attempt 1 failed; retrying Gemini once")
-    print("[LLM] Fallback: retrying Gemini (attempt 2)")
-    out = call_gemini(final_prompt)
-    if out:
-        return _sanitize_llm_text(out)
-
-    logger.warning("LLM: Gemini exhausted; falling back to Groq")
-    print("[LLM] Fallback: switching to Groq")
-    out = call_groq(final_prompt)
-    if out:
-        return _sanitize_llm_text(out)
-
-    logger.warning("LLM: Groq failed; OpenRouter + Gemini exhausted")
+    order = LLM_ORDER or ["groq", "openrouter", "gemini"]
+    for provider in order:
+        if provider == "openrouter":
+            logger.info("LLM pipeline: OpenRouter")
+            print("[LLM] Using API: OpenRouter")
+            out = call_openrouter_chat(chat_messages)
+            if out:
+                return _sanitize_llm_text(out)
+        elif provider == "gemini":
+            logger.info("LLM pipeline: Gemini")
+            print("[LLM] Using API: Gemini")
+            out = call_gemini(final_prompt)
+            if out:
+                return _sanitize_llm_text(out)
+        elif provider == "groq":
+            logger.info("LLM pipeline: Groq")
+            print("[LLM] Using API: Groq")
+            out = call_groq_chat(chat_messages)
+            if out:
+                return _sanitize_llm_text(out)
+        else:
+            logger.warning("LLM_ORDER unknown provider %r — skipped", provider)
 
     logger.error("LLM: all providers failed")
     print("[LLM] All providers failed; returning emotion-aware graceful error message")

@@ -8,6 +8,15 @@ from rest_framework.viewsets import ViewSet
 
 from emotions.models import DailyMoodSummary, EmotionAnalysis
 
+# Valence for trend line: negative = heavier moods, positive = lighter (matches dashboard colors / UX).
+MOOD_SCORE_BY_EMOTION = {
+    "happy": 2.0,
+    "neutral": 0.0,
+    "anxious": -0.7,
+    "sad": -1.5,
+    "angry": -1.2,
+}
+
 
 class DashboardViewSet(ViewSet):
     """Analytics: emotion_stats, mood_trend, weekly_report, monthly_report."""
@@ -63,6 +72,44 @@ class DashboardViewSet(ViewSet):
                 "end": end.isoformat(),
                 "points": series,
                 "series": series,
+            }
+        )
+
+    def mood_timeline(self, request):
+        """
+        Per-message mood trend from all chat-derived emotion analyses (chronological).
+        Returns up to `limit` most recent points (default 2000, max 5000) so the chart stays responsive.
+        """
+        try:
+            limit = int(request.query_params.get("limit", 2000))
+        except (TypeError, ValueError):
+            limit = 2000
+        limit = max(1, min(limit, 5000))
+
+        base = EmotionAnalysis.objects.filter(user=request.user)
+        total_in_db = base.count()
+        # Newest first, then reverse so chart reads left → right in time.
+        rows = list(base.order_by("-created_at")[:limit])
+        rows.reverse()
+
+        points = [
+            {
+                "i": idx + 1,
+                "at": row.created_at.isoformat(),
+                "emotion": row.primary_emotion,
+                "mood_score": float(MOOD_SCORE_BY_EMOTION.get(row.primary_emotion, 0.0)),
+                "confidence": float(row.confidence),
+            }
+            for idx, row in enumerate(rows)
+        ]
+        return Response(
+            {
+                "total_in_db": total_in_db,
+                "returned": len(points),
+                "limit": limit,
+                "truncated": total_in_db > limit,
+                "mood_scale": MOOD_SCORE_BY_EMOTION,
+                "points": points,
             }
         )
 

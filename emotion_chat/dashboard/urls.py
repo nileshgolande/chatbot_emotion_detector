@@ -12,6 +12,10 @@ urlpatterns = [
         DashboardViewSet.as_view({"get": "mood_trend"}),
     ),
     path(
+        "mood_timeline/",
+        DashboardViewSet.as_view({"get": "mood_timeline"}),
+    ),
+    path(
         "weekly_report/",
         DashboardViewSet.as_view({"get": "weekly_report"}),
     ),

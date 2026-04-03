@@ -9,7 +9,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-_JOURNAL_GEMINI_MODEL = os.environ.get("JOURNAL_GEMINI_MODEL", "gemini-2.0-flash").strip()
+_JOURNAL_GEMINI_MODEL = os.environ.get("JOURNAL_GEMINI_MODEL", "gemini-2.5-flash").strip()
 _JOURNAL_MAX_OUT = int(os.environ.get("JOURNAL_MAX_OUTPUT_TOKENS", "512"))
 # Reuse chat client per (api_key, temperature) — constructing LangChain LLMs per request is slow.
 _journal_llm_cache: dict[tuple[str, float], Any] = {}

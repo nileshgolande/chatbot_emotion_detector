@@ -1,6 +1,62 @@
 """Shared empathy-first system prompts (emoji-aware, validation-first)."""
 from __future__ import annotations
 
+# Mood → emoji palette for LangGraph replies (hints + light post-processing).
+EMOTION_EMOJI_PALETTE: dict[str, str] = {
+    "happy": "💛 ✨ 🌟 🤗 🎉",
+    "sad": "🫂 💙 🌙 💜 🕯️",
+    "anxious": "🌿 🫧 🌊 ✨ 🤲",
+    "angry": "🕊️ 💬 🙏 🌱 💛",
+    "neutral": "💬 🌤️ ✨ 💛",
+}
+
+# Compact pair for opening when we need a guaranteed mood cue (fallback / finalize guard).
+EMOTION_LEAD_PAIR: dict[str, str] = {
+    "happy": "💛✨",
+    "sad": "🫂💙",
+    "anxious": "🌿🫧",
+    "angry": "🕊️💬",
+    "neutral": "💬🌤️",
+}
+
+
+def emotion_lead_pair(primary_emotion: str | None) -> str:
+    p = (primary_emotion or "neutral").strip().lower() or "neutral"
+    return EMOTION_LEAD_PAIR.get(p, EMOTION_LEAD_PAIR["neutral"])
+
+
+def emotion_emoji_palette_line(primary_emotion: str | None) -> str:
+    p = (primary_emotion or "neutral").strip().lower() or "neutral"
+    return EMOTION_EMOJI_PALETTE.get(p, EMOTION_EMOJI_PALETTE["neutral"])
+
+
+def langgraph_emoji_instruction(primary_emotion: str | None) -> str:
+    """Extra system text for LangGraph so replies carry mood-matched emojis."""
+    pe = (primary_emotion or "neutral").strip() or "neutral"
+    palette = emotion_emoji_palette_line(pe)
+    lead = emotion_lead_pair(pe)
+    return (
+        f"\nEmojis for this graph turn (detected mood: {pe}):\n"
+        f"• Use 1–3 Unicode emojis that fit this mood. Good options → {palette}\n"
+        f"• You may open with {lead} or weave similar emojis into the first sentence—never a stiff header line.\n"
+        "• Keep the same sparse, human rules as above (not an emoji on every sentence).\n"
+    )
+
+
+def text_contains_emoji(text: str) -> bool:
+    if not text:
+        return False
+    for ch in text:
+        o = ord(ch)
+        if (
+            0x1F300 <= o <= 0x1F9FF
+            or 0x2600 <= o <= 0x27BF
+            or 0x1F600 <= o <= 0x1F64F
+            or 0x1F900 <= o <= 0x1FAFF
+        ):
+            return True
+    return False
+
 
 def empathy_core_instructions() -> str:
     return (
@@ -88,15 +144,14 @@ def build_system_prompt(
     ]
     if history_block.strip():
         parts.append(f"Recent conversation (last turns):\n{history_block}\n")
+    parts.append(langgraph_emoji_instruction(primary_emotion))
     return "".join(parts)
 
 
 def fallback_reply_empathic(user_text: str, primary_emotion: str, relationship_stage: str) -> str:
     mood = primary_emotion or "neutral"
     stage = relationship_stage or "stranger"
-    lead = {"happy": "💛✨", "sad": "🫂💙", "anxious": "🌿🫧", "angry": "🕊️💬", "neutral": "💬🌤️"}.get(
-        mood.lower(), "💬🌤️"
-    )
+    lead = emotion_lead_pair(mood)
     return (
         f"{lead} I’m really glad you told me that. I hear you — it sounds like a lot to carry right now, "
         f"and what you feel matters. 🌤️\n\n"
