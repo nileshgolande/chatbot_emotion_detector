@@ -1,12 +1,17 @@
+import logging
+
+from django.conf import settings
 from rest_framework import mixins, status, viewsets
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from emotions.emotion_detector import emotion_detector
-from emotions.models import EmotionAnalysis
 
-from .ai_response_generator import AIResponseGenerator
+logger = logging.getLogger(__name__)
+from emotions.models import EmotionAnalysis
+from services.llm_service import get_llm_response
+
 from .daily_mood import update_daily_mood
 from .models import Conversation, Message
 from .serializers import (
@@ -16,7 +21,22 @@ from .serializers import (
     MessageSerializer,
 )
 
-_ai = AIResponseGenerator()
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def llm_response_view(request):
+    """Minimal LLM endpoint: message via GET query or POST JSON; returns { "response": ... }."""
+    if request.method == "GET":
+        user_input = (
+            (request.query_params.get("message") or request.query_params.get("q") or "")
+        ).strip()
+    else:
+        user_input = (
+            (request.data.get("message") or request.data.get("content") or "")
+        ).strip()
+    if not user_input:
+        return Response({"detail": "message required"}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({"response": get_llm_response(user_input)})
 
 
 class ConversationViewSet(
@@ -60,37 +80,28 @@ class ConversationViewSet(
         if not content:
             return Response({"detail": "content required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        user_msg = Message.objects.create(conversation=conv, sender="user", content=content)
-        analysis = emotion_detector.detect_emotion(content)
+        try:
+            user_msg = Message.objects.create(
+                conversation=conv, sender="user", content=content
+            )
+            analysis = emotion_detector.detect_emotion(content)
 
-        EmotionAnalysis.objects.create(
-            user=request.user,
-            message=user_msg,
-            primary_emotion=analysis["primary_emotion"],
-            emotion_scores=analysis["emotion_scores"],
-            emotion_vector=analysis["emotion_vector"],
-            confidence=analysis["confidence"],
-        )
-        update_daily_mood(request.user)
+            EmotionAnalysis.objects.create(
+                user=request.user,
+                message=user_msg,
+                primary_emotion=analysis["primary_emotion"],
+                emotion_scores=analysis["emotion_scores"],
+                emotion_vector=analysis["emotion_vector"],
+                confidence=analysis["confidence"],
+            )
+            update_daily_mood(request.user)
 
-        prior = list(
-            conv.messages.exclude(pk=user_msg.pk)
-            .select_related("emotion")
-            .order_by("-created_at")[:20]
-        )
-        prior.reverse()
-        history_for_ai = prior[-4:] if len(prior) > 4 else prior
+            reply = get_llm_response(content, analysis.get("primary_emotion"))
+            Message.objects.create(conversation=conv, sender="bot", content=reply)
 
-        reply = _ai.generate_response(
-            content,
-            {
-                "primary_emotion": analysis["primary_emotion"],
-                "relationship_stage": conv.agent_relationship_stage,
-            },
-            conversation_history=history_for_ai,
-            relationship_stage=conv.agent_relationship_stage,
-        )
-        Message.objects.create(conversation=conv, sender="bot", content=reply)
-
-        msgs = conv.messages.select_related("emotion").all()
-        return Response(MessageSerializer(msgs, many=True).data)
+            msgs = conv.messages.select_related("emotion").all()
+            return Response(MessageSerializer(msgs, many=True).data)
+        except Exception as exc:
+            logger.exception("send_message failed for user=%s conv=%s", request.user_id, pk)
+            detail = str(exc) if settings.DEBUG else "Could not send message. Try again."
+            return Response({"detail": detail}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

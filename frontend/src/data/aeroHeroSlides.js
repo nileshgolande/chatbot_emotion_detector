@@ -1,15 +1,18 @@
 /**
- * Hero carousel: slide 0 = uplifting video; rest = high-res emotion / connection imagery (Unsplash).
- * Durations control auto-advance; tweak in one place.
+ * Hero carousel: slide 0 = background video from `frontend/public/videos/`; rest = Unsplash stills.
+ * Video asset: public/videos/whatsapp-chat-hero.mp4 (served at /videos/whatsapp-chat-hero.mp4).
  */
 export const HERO_SLIDE_DURATION_MS = 7500;
+
+const heroVideoSrc = `${process.env.PUBLIC_URL || ""}/videos/whatsapp-chat-hero.mp4`;
 
 export const AERO_HERO_SLIDES = [
   {
     id: "video-joy",
     kind: "video",
-    /** Uplifting, human — Mixkit free stock (swap `src` if CDN path changes) */
-    src: "https://assets.mixkit.co/videos/preview/mixkit-friends-having-a-good-time-in-the-city-42537-large.mp4",
+    src: heroVideoSrc,
+    /** If the bundled file is missing in some environment, a remote clip still loads. */
+    fallbackSrc: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
     durationMs: 9000,
     caption: "Joy in motion",
   },

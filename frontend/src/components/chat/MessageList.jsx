@@ -82,7 +82,7 @@ export default function MessageList({ messages, loading }) {
           return (
             <li key={m.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
               <div
-                className={`relative max-w-[85%] rounded-2xl px-3 py-2 ${
+                className={`relative flex max-w-[85%] flex-col rounded-2xl px-3 py-2 ${
                   isUser
                     ? "rounded-tr-md bg-[#d9fdd3] text-slate-900 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] dark:bg-emerald-700 dark:text-white dark:shadow-sm"
                     : "rounded-tl-md border border-slate-200/80 bg-white text-slate-900 shadow-[0_1px_0.5px_rgba(11,20,26,0.08)] dark:border-wa-bar/50 dark:bg-wa-bubbleBot dark:text-emerald-50 dark:shadow-sm"
@@ -91,9 +91,15 @@ export default function MessageList({ messages, loading }) {
                 {!isUser && botCompanionStrip()}
                 <p className="whitespace-pre-wrap break-words text-sm">{m.content}</p>
                 {isUser && emo && <div className="mt-1 flex items-center gap-2">{emotionBadge(emo)}</div>}
-                <span className="absolute bottom-1 right-2 text-[10px] text-slate-500/80 dark:text-emerald-200/50">
+                <div
+                  className={`mt-1 text-[10px] ${
+                    isUser
+                      ? "self-end text-right text-slate-500/80 dark:text-emerald-200/50"
+                      : "self-start text-left text-slate-500/80 dark:text-emerald-200/50"
+                  }`}
+                >
                   {timeLabel(m.created_at)}
-                </span>
+                </div>
               </div>
             </li>
           );

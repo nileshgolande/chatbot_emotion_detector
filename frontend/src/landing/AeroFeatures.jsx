@@ -4,20 +4,20 @@ import { CheckCheck, Lock, MessageCircle } from "lucide-react";
 
 const cards = [
   {
-    title: "Emotional double-ticks",
-    body: "We don't just read your messages; we feel them.",
+    title: "Emotion-aware replies",
+    body: "Your message is analyzed for emotion, and the assistant responds with warmth using a multi-LLM fallback chain (Gemini → Groq → OpenRouter).",
     Icon: CheckCheck,
     glow: true,
   },
   {
-    title: "Dynamic bubbles",
-    body: "Chat bubbles that shift colors based on your emotion. Green for happy, soft blue for venting.",
+    title: "Mood analytics dashboard",
+    body: "Track dominant emotion, confidence, and trends from your chat history—so you can spot patterns over time.",
     Icon: MessageCircle,
     glow: false,
   },
   {
-    title: "Encrypted empathy",
-    body: "Your feelings are private. End-to-end encrypted mood tracking stored in PostgreSQL.",
+    title: "Journal insights",
+    body: "Write journal entries and (when Gemini is available) get gentle AI reflections. Works offline too with saved entries.",
     Icon: Lock,
     glow: false,
   },
@@ -33,7 +33,7 @@ export default function AeroFeatures() {
         </p>
         <h2 className="mt-3 text-center text-3xl font-black text-white md:text-4xl">Built like the app you trust</h2>
         <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-white/65">
-          Familiar patterns — elevated for emotional intelligence.
+          Emotion-aware chat, mood trends, and journal reflections—designed for real conversations.
         </p>
 
         <div className="mt-14 grid gap-6 md:grid-cols-3">

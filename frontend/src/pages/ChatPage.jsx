@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
@@ -30,6 +31,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [msgLoading, setMsgLoading] = useState(false);
   const [input, setInput] = useState("");
+  const [sendError, setSendError] = useState(null);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false,
   );
@@ -123,6 +125,7 @@ export default function ChatPage() {
   const send = async () => {
     const text = input.trim();
     if (!selectedId || !text) return;
+    setSendError(null);
     setInput("");
     const optimistic = {
       id: `tmp-${Date.now()}`,
@@ -182,7 +185,14 @@ export default function ChatPage() {
           prev.map((c) => (c.id === selectedId ? { ...c, last_message_preview: preview } : c)),
         );
       }
-    } catch {
+    } catch (err) {
+      const detail =
+        err.response?.data?.detail ||
+        (typeof err.response?.data === "string" ? err.response.data : null) ||
+        err.message ||
+        "Request failed";
+      console.error("send_message failed", err.response?.status, err.response?.data);
+      setSendError(typeof detail === "string" ? detail : JSON.stringify(detail));
       setMessages((m) => m.filter((x) => x.id !== optimistic.id));
     } finally {
       setMsgLoading(false);
@@ -198,6 +208,26 @@ export default function ChatPage() {
   return (
     <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-wa-bg dark:text-emerald-50">
       <Navbar />
+      {isDemo && (
+        <div
+          className="shrink-0 border-b border-amber-500/40 bg-amber-500/15 px-4 py-2 text-center text-xs font-medium text-amber-950 dark:text-amber-100"
+          role="status"
+        >
+          Demo mode: replies are local only.{" "}
+          <Link to="/login" className="underline font-semibold">
+            Log in
+          </Link>{" "}
+          for real API + AI responses.
+        </div>
+      )}
+      {sendError && !isDemo && (
+        <div
+          className="shrink-0 border-b border-red-500/40 bg-red-500/10 px-4 py-2 text-center text-xs text-red-800 dark:text-red-200"
+          role="alert"
+        >
+          {sendError}
+        </div>
+      )}
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         {showList && (
@@ -218,7 +248,10 @@ export default function ChatPage() {
             messages={messages}
             msgLoading={msgLoading}
             input={input}
-            onInput={setInput}
+            onInput={(v) => {
+              setInput(v);
+              if (sendError) setSendError(null);
+            }}
             onSend={send}
             showBack={isMobile}
             onBack={() => setMobileMode("list")}

@@ -7,7 +7,8 @@ import { AERO_THEME } from "./AeroAccentContext";
 
 export default function AeroHero() {
   const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
+  /** Pauses auto-advance only; background video keeps playing while hovered. */
+  const [carouselPaused, setCarouselPaused] = useState(false);
   const videoRef = useRef(null);
   const slide = AERO_HERO_SLIDES[index] ?? AERO_HERO_SLIDES[0];
   const duration = slide.durationMs ?? 7500;
@@ -21,26 +22,26 @@ export default function AeroHero() {
   }, []);
 
   useEffect(() => {
-    if (paused) return undefined;
+    if (carouselPaused) return undefined;
     const t = window.setTimeout(goNext, duration);
     return () => window.clearTimeout(t);
-  }, [index, duration, paused, goNext]);
+  }, [index, duration, carouselPaused, goNext]);
 
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (slide?.kind === "video" && !paused) {
+    if (slide?.kind === "video") {
       v.play().catch(() => {});
     } else {
       v.pause();
     }
-  }, [index, slide?.kind, paused]);
+  }, [index, slide?.kind]);
 
   return (
     <section
       className="relative min-h-[min(88dvh,820px)] overflow-hidden"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      onMouseEnter={() => setCarouselPaused(true)}
+      onMouseLeave={() => setCarouselPaused(false)}
     >
       {/* Slides: video first, then images */}
       <div className="absolute inset-0 z-0 bg-[#0a1628]">
@@ -61,9 +62,16 @@ export default function AeroHero() {
                 muted
                 loop
                 playsInline
+                preload="auto"
                 aria-hidden
+                onLoadedData={(e) => {
+                  e.currentTarget.play().catch(() => {});
+                }}
               >
                 <source src={slide.src} type="video/mp4" />
+                {slide.fallbackSrc ? (
+                  <source src={slide.fallbackSrc} type="video/mp4" />
+                ) : null}
               </video>
             ) : (
               <img
@@ -178,8 +186,10 @@ export default function AeroHero() {
           </Link>
         </motion.div>
 
-        {paused && (
-          <p className="mt-4 text-[10px] font-medium uppercase tracking-widest text-white/40">Paused — move away to resume</p>
+        {carouselPaused && (
+          <p className="mt-4 text-[10px] font-medium uppercase tracking-widest text-white/40">
+            Slideshow paused — move away to advance slides
+          </p>
         )}
       </div>
     </section>

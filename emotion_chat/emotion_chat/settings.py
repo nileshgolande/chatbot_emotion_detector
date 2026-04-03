@@ -7,14 +7,16 @@ from pathlib import Path
 
 from decouple import config
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 try:
     from dotenv import load_dotenv
 
+    # Load project `.env` reliably (not only when cwd is this folder).
+    load_dotenv(BASE_DIR / ".env")
     load_dotenv()
 except ImportError:
     pass
-
-BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-dev-only-change-me")
 DEBUG = config("DEBUG", default=True, cast=bool)

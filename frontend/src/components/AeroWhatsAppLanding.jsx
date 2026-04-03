@@ -4,7 +4,6 @@ import { AeroAccentProvider } from "../landing/AeroAccentContext";
 import AeroNavbar from "../landing/AeroNavbar";
 import AeroHero from "../landing/AeroHero";
 import AeroFeatures from "../landing/AeroFeatures";
-import AeroMockup from "../landing/AeroMockup";
 
 function AeroFooter() {
   return (
@@ -35,7 +34,6 @@ export default function AeroWhatsAppLanding() {
         <AeroNavbar />
         <main>
           <AeroHero />
-          <AeroMockup />
           <AeroFeatures />
         </main>
         <AeroFooter />
