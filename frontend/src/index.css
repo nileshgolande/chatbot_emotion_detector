@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* WhatsApp-style light / dark — html.dark toggled by ThemeContext */
+html {
+  --wa-bg: #f0f2f5;
+  --wa-panel: #ffffff;
+  --wa-header: #f0f2f5;
+  --wa-bar: #e9edef;
+  --wa-bubble-user: #d9fdd3;
+  --wa-bubble-bot: #ffffff;
+  --wa-accent: #00a884;
+  --wa-muted: #667781;
+  --brand-primary: #6366f1;
+  --brand-accent: #818cf8;
+  --landing-scrim: rgba(248, 250, 252, 0.82);
+  --landing-scrim-mid: rgba(241, 245, 249, 0.55);
+}
+
+html.dark {
+  --wa-bg: #0b141a;
+  --wa-panel: #111b21;
+  --wa-header: #202c33;
+  --wa-bar: #2a3942;
+  --wa-bubble-user: #005c4b;
+  --wa-bubble-bot: #202c33;
+  --wa-accent: #00a884;
+  --wa-muted: #8696a0;
+  --brand-primary: #818cf8;
+  --brand-accent: #a78bfa;
+  --landing-scrim: rgba(3, 7, 18, 0.88);
+  --landing-scrim-mid: rgba(15, 23, 42, 0.55);
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}

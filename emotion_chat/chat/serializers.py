@@ -1,0 +1,61 @@
+from django.core.exceptions import ObjectDoesNotExist
+from rest_framework import serializers
+
+from .models import Conversation, Message
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    emotion = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = ("id", "sender", "content", "emotion", "created_at")
+
+    def get_emotion(self, obj):
+        if obj.sender != "user":
+            return None
+        try:
+            ea = obj.emotion
+        except ObjectDoesNotExist:
+            return None
+        return {
+            "primary_emotion": ea.primary_emotion,
+            "confidence": ea.confidence,
+            "emotion_scores": ea.emotion_scores,
+        }
+
+
+class ConversationSerializer(serializers.ModelSerializer):
+    last_message_preview = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Conversation
+        fields = ("id", "title", "last_message_preview", "created_at", "updated_at")
+
+    def get_last_message_preview(self, obj):
+        last = obj.messages.order_by("-created_at").first()
+        if not last:
+            return ""
+        t = last.content
+        return t[:120] + ("…" if len(t) > 120 else "")
+
+
+class ConversationDetailSerializer(serializers.ModelSerializer):
+    messages = MessageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Conversation
+        fields = (
+            "id",
+            "title",
+            "agent_relationship_stage",
+            "created_at",
+            "updated_at",
+            "messages",
+        )
+
+
+class ConversationCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Conversation
+        fields = ("title",)
