@@ -298,6 +298,17 @@ class EmotionDetector:
 emotion_detector = EmotionDetector()
 
 
+def warmup_emotion_classifier() -> None:
+    """
+    Load DistilRoBERTa pipeline once (heavy on first use). Call from a background
+    thread at process start so the first chat message is not blocked by model IO.
+    """
+    try:
+        _get_classifier()
+    except Exception as exc:
+        logger.warning("Emotion classifier warmup failed: %s", exc)
+
+
 def analyze_text(text: str) -> dict[str, Any]:
     """Backward-compatible entry point using the shared detector instance."""
     return emotion_detector.detect_emotion(text)

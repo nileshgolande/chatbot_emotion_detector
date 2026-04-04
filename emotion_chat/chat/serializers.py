@@ -59,6 +59,19 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
 
 
 class ConversationCreateSerializer(serializers.ModelSerializer):
+    """Optional `first_message` creates the conversation and first reply in one request."""
+
+    first_message = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        max_length=6000,
+    )
+
     class Meta:
         model = Conversation
-        fields = ("title",)
+        fields = ("title", "first_message")
+
+    def create(self, validated_data):
+        validated_data.pop("first_message", None)
+        return super().create(validated_data)

@@ -9,10 +9,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from emotions.emotion_detector import emotion_detector
-
-logger = logging.getLogger(__name__)
 from emotions.models import EmotionAnalysis
 from services.llm_service import get_llm_response
+
+logger = logging.getLogger(__name__)
 
 from .daily_mood import update_daily_mood
 from .models import Conversation, Message
@@ -24,6 +24,63 @@ from .serializers import (
 )
 
 _TITLE_MAX_LEN = 120
+
+
+def _send_message_payload(request, conv: Conversation, content: str) -> dict:
+    """
+    Persist user message, run emotion + LLM, persist bot reply.
+    Caller must wrap in transaction.atomic() when combined with conversation create.
+    """
+    content = (content or "").strip()
+    if not content:
+        raise ValueError("content required")
+
+    user_msg = Message.objects.create(conversation=conv, sender="user", content=content)
+    if not (conv.title or "").strip() and conv.messages.filter(sender="user").count() == 1:
+        conv.title = _title_from_first_message(content)
+        conv.save(update_fields=["title", "updated_at"])
+
+    analysis = emotion_detector.detect_emotion(content)
+
+    EmotionAnalysis.objects.create(
+        user=request.user,
+        message=user_msg,
+        primary_emotion=analysis["primary_emotion"],
+        emotion_scores=analysis["emotion_scores"],
+        emotion_vector=analysis["emotion_vector"],
+        confidence=analysis["confidence"],
+    )
+
+    u = request.user
+
+    def _refresh_daily_mood():
+        try:
+            update_daily_mood(u)
+        except Exception:
+            logger.exception("update_daily_mood (background)")
+
+    transaction.on_commit(
+        lambda: threading.Thread(target=_refresh_daily_mood, daemon=True).start()
+    )
+
+    prior = list(
+        conv.messages.exclude(pk=user_msg.pk).order_by("-created_at")[:5]
+    )
+    prior.reverse()
+
+    reply = get_llm_response(
+        content,
+        analysis.get("primary_emotion"),
+        history=prior,
+    )
+    Message.objects.create(conversation=conv, sender="bot", content=reply)
+
+    msgs = conv.messages.select_related("emotion").all()
+    conv.refresh_from_db()
+    return {
+        "messages": MessageSerializer(msgs, many=True).data,
+        "conversation": ConversationSerializer(conv).data,
+    }
 
 
 def _title_from_first_message(text: str) -> str:
@@ -81,6 +138,27 @@ class ConversationViewSet(
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        first = (serializer.validated_data.get("first_message") or "").strip()
+        headers = None
+        try:
+            with transaction.atomic():
+                self.perform_create(serializer)
+                conv = serializer.instance
+                headers = self.get_success_headers(serializer.data)
+                if first:
+                    payload = _send_message_payload(request, conv, first)
+                    return Response(payload, status=status.HTTP_201_CREATED, headers=headers or {})
+        except Exception as exc:
+            if first:
+                logger.exception("create+first_message failed for user=%s", request.user_id)
+                detail = str(exc) if settings.DEBUG else "Could not start chat. Try again."
+                return Response({"detail": detail}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            raise
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers or {})
+
     @action(detail=True, methods=["get"])
     def messages(self, request, pk=None):
         conv = self.get_object()
@@ -99,59 +177,9 @@ class ConversationViewSet(
             return Response({"detail": "content required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user_msg = Message.objects.create(
-                conversation=conv, sender="user", content=content
-            )
-            # Name the thread from the first user message when title is still empty
-            if not (conv.title or "").strip() and conv.messages.filter(sender="user").count() == 1:
-                conv.title = _title_from_first_message(content)
-                conv.save(update_fields=["title", "updated_at"])
-
-            analysis = emotion_detector.detect_emotion(content)
-
-            EmotionAnalysis.objects.create(
-                user=request.user,
-                message=user_msg,
-                primary_emotion=analysis["primary_emotion"],
-                emotion_scores=analysis["emotion_scores"],
-                emotion_vector=analysis["emotion_vector"],
-                confidence=analysis["confidence"],
-            )
-
-            u = request.user
-
-            def _refresh_daily_mood():
-                try:
-                    update_daily_mood(u)
-                except Exception:
-                    logger.exception("update_daily_mood (background)")
-
-            transaction.on_commit(
-                lambda: threading.Thread(target=_refresh_daily_mood, daemon=True).start()
-            )
-
-            # Build short history window (last 5 messages before this one).
-            prior = list(
-                conv.messages.exclude(pk=user_msg.pk)
-                .order_by("-created_at")[:5]
-            )
-            prior.reverse()
-
-            reply = get_llm_response(
-                content,
-                analysis.get("primary_emotion"),
-                history=prior,
-            )
-            Message.objects.create(conversation=conv, sender="bot", content=reply)
-
-            msgs = conv.messages.select_related("emotion").all()
-            conv.refresh_from_db()
-            return Response(
-                {
-                    "messages": MessageSerializer(msgs, many=True).data,
-                    "conversation": ConversationSerializer(conv).data,
-                }
-            )
+            with transaction.atomic():
+                payload = _send_message_payload(request, conv, content)
+            return Response(payload)
         except Exception as exc:
             logger.exception("send_message failed for user=%s conv=%s", request.user_id, pk)
             detail = str(exc) if settings.DEBUG else "Could not send message. Try again."

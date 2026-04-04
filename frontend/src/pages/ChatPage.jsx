@@ -8,6 +8,8 @@ import ChatInterface from "../components/chat/ChatInterface";
 import { EMOTION_EMOJIS } from "../data/emotionChartTheme";
 import { useAuth } from "../hooks/useAuth";
 
+const isDraftConversationId = (id) => id != null && String(id).startsWith("local-new-");
+
 const DEMO_CONVERSATIONS = [
   {
     id: 1,
@@ -95,6 +97,14 @@ export default function ChatPage() {
         });
         return;
       }
+      if (isDraftConversationId(id)) {
+        setConversations((prev) => {
+          const next = prev.filter((c) => c.id !== id);
+          setSelectedId((sid) => (sid === id ? next[0]?.id ?? null : sid));
+          return next;
+        });
+        return;
+      }
       try {
         await api.delete(`/api/chat/conversations/${id}/`);
         setConversations((prev) => {
@@ -117,6 +127,10 @@ export default function ChatPage() {
 
   const loadMessages = useCallback(async () => {
     if (!selectedId) {
+      setMessages([]);
+      return;
+    }
+    if (!isDemo && isDraftConversationId(selectedId)) {
       setMessages([]);
       return;
     }
@@ -152,21 +166,15 @@ export default function ChatPage() {
       setMessages([]);
       return;
     }
-    try {
-      const { data } = await api.post("/api/chat/conversations/", { title: "" });
-      setConversations((c) => [data, ...c]);
-      setSelectedId(data.id);
-      setMessages([]);
-    } catch {
-      const id = Date.now();
-      const now = new Date().toISOString();
-      setConversations((c) => [
-        { id, title: "New chat (offline)", last_message_preview: "", created_at: now },
-        ...c,
-      ]);
-      setSelectedId(id);
-      setMessages([]);
-    }
+    // Local draft only — server conversation is created on first send (one round-trip).
+    const id = `local-new-${Date.now()}`;
+    const now = new Date().toISOString();
+    setConversations((c) => [
+      { id, title: "New chat", last_message_preview: "", created_at: now },
+      ...c,
+    ]);
+    setSelectedId(id);
+    setMessages([]);
   };
 
   const send = async () => {
@@ -230,9 +238,12 @@ export default function ChatPage() {
 
     setMsgLoading(true);
     try {
-      const { data } = await api.post(`/api/chat/conversations/${selectedId}/send_message/`, {
-        content: text,
-      });
+      const draft = isDraftConversationId(selectedId);
+      const { data } = draft
+        ? await api.post("/api/chat/conversations/", { title: "", first_message: text })
+        : await api.post(`/api/chat/conversations/${selectedId}/send_message/`, {
+            content: text,
+          });
       const list = Array.isArray(data?.messages)
         ? data.messages
         : Array.isArray(data)
@@ -242,11 +253,16 @@ export default function ChatPage() {
       const last = list[list.length - 1];
       const preview = (last && last.content ? String(last.content) : "").slice(0, 120);
       const convPatch = data?.conversation;
+      const resolvedId = convPatch?.id ?? selectedId;
+      if (draft && convPatch) {
+        setSelectedId(resolvedId);
+      }
       if (preview || convPatch) {
         setConversations((prev) =>
           prev.map((c) => {
             if (c.id !== selectedId) return c;
-            const next = { ...c };
+            const next = { ...c, ...(convPatch || {}) };
+            if (convPatch?.id != null) next.id = convPatch.id;
             if (preview) next.last_message_preview = preview;
             if (convPatch?.title != null) next.title = convPatch.title;
             if (convPatch?.last_message_preview != null)
