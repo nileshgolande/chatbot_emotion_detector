@@ -1,4 +1,5 @@
 import React from "react";
+import { MessageCircle } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 
 function Item({ to, label, children }) {
@@ -31,9 +32,9 @@ export default function Sidebar() {
         to="/"
         title="Home"
         aria-label="Home"
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-sm font-bold text-white shadow-sm transition hover:brightness-110 hover:ring-2 hover:ring-emerald-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm transition hover:brightness-110 hover:ring-2 hover:ring-emerald-400/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
       >
-        E
+        <MessageCircle className="h-6 w-6" strokeWidth={2} aria-hidden />
       </Link>
       <div className="my-1 h-px w-10 shrink-0 bg-slate-200 dark:bg-wa-bar" />
       <Item to="/chat" label="Chats">

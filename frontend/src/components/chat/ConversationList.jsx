@@ -1,5 +1,19 @@
 import React, { useState } from "react";
 
+/** When the conversation was created (sidebar list). */
+function formatConversationCreated(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function TrashIcon({ className }) {
   return (
     <svg
@@ -70,11 +84,22 @@ export default function ConversationList({
                     selectedId === c.id ? "bg-slate-100 dark:bg-wa-header" : ""
                   }`}
                 >
-                  <p className="truncate text-sm font-medium text-slate-900 dark:text-emerald-50">
-                    {c.title || `Chat ${c.id}`}
-                  </p>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="min-w-0 truncate text-sm font-medium text-slate-900 dark:text-emerald-50">
+                      {c.title || `Chat ${c.id}`}
+                    </p>
+                    {c.created_at ? (
+                      <time
+                        dateTime={c.created_at}
+                        className="shrink-0 text-[10px] tabular-nums text-slate-400 dark:text-emerald-200/50"
+                        title={`Created ${formatConversationCreated(c.created_at)}`}
+                      >
+                        {formatConversationCreated(c.created_at)}
+                      </time>
+                    ) : null}
+                  </div>
                   {c.last_message_preview && (
-                    <p className="truncate text-xs text-slate-500 dark:text-wa-muted">{c.last_message_preview}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-wa-muted">{c.last_message_preview}</p>
                   )}
                 </button>
                 {onDelete && (

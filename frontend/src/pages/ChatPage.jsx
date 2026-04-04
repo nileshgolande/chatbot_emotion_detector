@@ -9,7 +9,12 @@ import { EMOTION_EMOJIS } from "../data/emotionChartTheme";
 import { useAuth } from "../hooks/useAuth";
 
 const DEMO_CONVERSATIONS = [
-  { id: 1, title: "Welcome", last_message_preview: "Try the WhatsApp-style background" },
+  {
+    id: 1,
+    title: "Welcome",
+    last_message_preview: "Try the WhatsApp-style background",
+    created_at: new Date().toISOString(),
+  },
 ];
 
 const DEMO_MESSAGES = [
@@ -138,8 +143,9 @@ export default function ChatPage() {
   const createChat = async () => {
     if (isDemo) {
       const id = Date.now();
+      const now = new Date().toISOString();
       setConversations((c) => [
-        { id, title: "New chat", last_message_preview: "" },
+        { id, title: "New chat", last_message_preview: "", created_at: now },
         ...c,
       ]);
       setSelectedId(id);
@@ -153,7 +159,11 @@ export default function ChatPage() {
       setMessages([]);
     } catch {
       const id = Date.now();
-      setConversations((c) => [{ id, title: "New chat (offline)", last_message_preview: "" }, ...c]);
+      const now = new Date().toISOString();
+      setConversations((c) => [
+        { id, title: "New chat (offline)", last_message_preview: "", created_at: now },
+        ...c,
+      ]);
       setSelectedId(id);
       setMessages([]);
     }
