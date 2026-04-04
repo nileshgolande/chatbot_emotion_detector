@@ -1,6 +1,8 @@
 """Gemini-powered journal reflections (compassionate, practical)."""
 from __future__ import annotations
 
+import copy
+import json
 import logging
 import os
 from typing import Any
@@ -99,6 +101,51 @@ class JournalAIInsights:
                 "patterns": "Unable to analyze this period right now.",
                 "recommendations": "Continue journaling; try again later.",
             }
+
+    def enrich_daily_digest(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """
+        Optional LLM pass: richer headline, paragraphs, tags, quote, prompts, insight cards.
+        Falls back to heuristic payload when no API key or errors.
+        """
+        from .daily_digest import apply_llm_story_patch
+
+        key = _gemini_key()
+        if not key:
+            return payload
+        slim = {
+            "date": payload.get("date"),
+            "dominant_emotion": payload.get("dominant_emotion"),
+            "emotion_counts": payload.get("emotion_counts"),
+            "timeline": (payload.get("timeline") or [])[:20],
+            "existing_insights": (payload.get("insights") or [])[:4],
+        }
+        blob = json.dumps(slim, ensure_ascii=False)[:12000]
+        prompt = (
+            "You write warm, accurate daily journal copy for a mental wellness app.\n"
+            "Given ONE day of emotion-tagged chat messages (JSON), reply with ONLY valid JSON, "
+            "no markdown fences, keys:\n"
+            "headline (max 90 chars),\n"
+            "badge_label (emoji + short mood label, e.g. '😐 Mostly neutral'),\n"
+            "paragraphs (array of 2-4 short strings; reference real message snippets when helpful; "
+            "do not invent events absent from timeline),\n"
+            "tags (array of up to 4 objects {\"text\", \"emotion\"} emotion ∈ "
+            "happy,sad,anxious,angry,neutral),\n"
+            "quote (one empathetic line),\n"
+            "write_prompt (one reflection question),\n"
+            "insights (array of up to 3 objects {\"icon\",\"title\",\"body\",\"tone\"} "
+            "tone ∈ purple,green,orange,slate; base on patterns in data; no medical diagnoses).\n"
+            f"Data:\n{blob}"
+        )
+        try:
+            from langchain_core.messages import HumanMessage
+
+            llm = _journal_llm(key, 0.58)
+            out = llm.invoke([HumanMessage(content=prompt)])
+            text = (out.content or "").strip()
+            return apply_llm_story_patch(copy.deepcopy(payload), text)
+        except Exception as e:
+            logger.warning("enrich_daily_digest: %s", e)
+            return payload
 
 
 journal_ai = JournalAIInsights()
