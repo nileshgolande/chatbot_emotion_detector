@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .daily_digest import build_daily_digest
+from .daily_digest import build_daily_digest, user_display_label
 from .journal_ai_insights import journal_ai
 from .models import JournalEntry, JournalInsights
 from .serializers import JournalEntrySerializer, JournalInsightsSerializer
@@ -63,14 +63,22 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
             if any(w in tlow for w in words):
                 mood = label
                 break
-        reply = journal_ai.generate_entry_insights("Journal reflection", text[:6000], mood)
+        reply = journal_ai.generate_entry_insights(
+            "Journal reflection",
+            text[:6000],
+            mood,
+            user_display_name=user_display_label(request.user),
+        )
         return Response({"mood_guess": mood, "reply": reply})
 
     @action(detail=True, methods=["post"], url_path="generate_insights")
     def generate_insights(self, request, pk=None):
         entry = self.get_object()
         text = journal_ai.generate_entry_insights(
-            entry.title, entry.content, entry.mood_at_entry
+            entry.title,
+            entry.content,
+            entry.mood_at_entry,
+            user_display_name=user_display_label(request.user),
         )
         entry.ai_insights = text
         entry.save(update_fields=["ai_insights", "updated_at"])

@@ -209,7 +209,7 @@ export default function AeroHero({ overrideVideoSrc = null } = {}) {
             style={{ textShadow: "0 1px 8px rgba(0,0,0,0.45)" }}
           >
             <span className="text-[#25D366]">{signedInLabel}</span>
-            <span className="text-white/85"> — you&apos;re logged in. Pick chat or dashboard below.</span>
+            <span className="text-white/85"> — you&apos;re logged in. Pick chat, mood dashboard, or journal below.</span>
           </motion.p>
         ) : null}
 
@@ -227,7 +227,7 @@ export default function AeroHero({ overrideVideoSrc = null } = {}) {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-10 flex w-full max-w-md flex-col items-stretch gap-3 sm:max-w-none sm:flex-row sm:justify-center sm:gap-4"
+          className="mt-10 flex w-full max-w-md flex-col items-stretch gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4"
         >
           {user ? (
             <>
@@ -249,14 +249,20 @@ export default function AeroHero({ overrideVideoSrc = null } = {}) {
               >
                 Mood dashboard
               </Link>
+              <Link
+                to="/journal"
+                className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15 sm:py-4"
+              >
+                Journal
+              </Link>
             </>
           ) : (
             <>
               <Link
-                to="/register"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-8 py-3.5 text-sm font-bold text-[#075E54] shadow-[0_8px_32px_rgba(37,211,102,0.45)] transition hover:brightness-105 active:scale-[0.98] sm:min-w-[240px] sm:py-4"
+                to="/chat"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-8 py-3.5 text-sm font-bold text-[#075E54] shadow-[0_8px_32px_rgba(37,211,102,0.45)] transition hover:brightness-105 active:scale-[0.98] sm:min-w-[200px] sm:py-4"
               >
-                Register to start chatting
+                Start chatting
                 <span
                   className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#075E54]/12 text-base"
                   aria-hidden
@@ -265,10 +271,16 @@ export default function AeroHero({ overrideVideoSrc = null } = {}) {
                 </span>
               </Link>
               <Link
+                to="/register"
+                className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15 sm:py-4"
+              >
+                Create account
+              </Link>
+              <Link
                 to="/login"
                 className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15 sm:py-4"
               >
-                Already have an account?
+                Log in
               </Link>
             </>
           )}

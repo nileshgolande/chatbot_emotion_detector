@@ -4,6 +4,7 @@ import MessageInput from "./MessageInput";
 
 export default function ChatInterface({
   title,
+  greetingName: greetName,
   messages,
   msgLoading,
   input,
@@ -11,6 +12,9 @@ export default function ChatInterface({
   onSend,
   onBack,
   showBack,
+  replyTo,
+  onReply,
+  onCancelReply,
 }) {
   const onSubmit = (e) => {
     e.preventDefault();
@@ -30,20 +34,32 @@ export default function ChatInterface({
             ←
           </button>
         )}
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-sm font-semibold text-white">
-          AI
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-sm font-semibold text-white"
+          aria-hidden
+        >
+          ✦
         </div>
         <div className="min-w-0 flex-1">
+          {greetName ? (
+            <p className="truncate text-xs font-medium text-[#4A3F8F] dark:text-emerald-300/90">
+              Hello, {greetName}!
+            </p>
+          ) : null}
           <p className="truncate text-sm font-medium text-slate-900 dark:text-emerald-50">{title}</p>
-          <p className="text-xs text-slate-500 dark:text-wa-muted">Emotion-aware assistant</p>
+          <p className="text-xs text-slate-500 dark:text-wa-muted">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle" /> online
+          </p>
         </div>
       </header>
-      <MessageList messages={messages} loading={msgLoading} />
+      <MessageList messages={messages} loading={msgLoading} onReply={onReply} />
       <MessageInput
         value={input}
         onChange={onInput}
         onSubmit={onSubmit}
         disabled={msgLoading}
+        replyTo={replyTo}
+        onCancelReply={onCancelReply}
       />
     </div>
   );

@@ -16,14 +16,8 @@ function AppRoutes() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route
-        path="/chat"
-        element={
-          <ProtectedRoute>
-            <ChatPage />
-          </ProtectedRoute>
-        }
-      />
+      {/* Guests use local demo mode on first visit; logged-in users hit the API */}
+      <Route path="/chat" element={<ChatPage />} />
       <Route
         path="/journal"
         element={

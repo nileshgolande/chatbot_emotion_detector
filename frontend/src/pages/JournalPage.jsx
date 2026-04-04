@@ -3,9 +3,8 @@ import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import api from "../services/api";
 import { useAuth } from "../hooks/useAuth";
+import { greetingName as displayGreetingName } from "../utils/greetingName";
 import { EMOTION_EMOJIS, EMOTION_ORDER } from "../data/emotionChartTheme";
-
-const MOODS = ["happy", "sad", "anxious", "angry", "neutral"];
 
 /** Reference design palette */
 const JK = {
@@ -51,7 +50,6 @@ const DEMO_DIGEST = (iso) => ({
     paragraphs: [
       "In demo mode we show sample copy. Log in and chat to build a real timeline from your messages.",
       "Your journal will summarize mood patterns and gentle insights from your history.",
-      "You can still save private entries below whenever you like.",
     ],
     tags: [
       { text: "Demo preview", emotion: "neutral" },
@@ -98,22 +96,13 @@ export default function JournalPage() {
   const [digestLoading, setDigestLoading] = useState(true);
   const [digestError, setDigestError] = useState(null);
 
-  const [entries, setEntries] = useState([]);
-  const [entriesLoading, setEntriesLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [form, setForm] = useState({
-    title: "",
-    content: "",
-    mood_at_entry: "neutral",
-  });
-
   const [reflectText, setReflectText] = useState("");
   const [reflectOut, setReflectOut] = useState(null);
   const [reflectLoading, setReflectLoading] = useState(false);
 
   const isToday = anchorISO === todayIso;
   const isYesterday = anchorISO === addDaysISO(todayIso, -1);
+  const greet = displayGreetingName(user);
 
   const loadDigest = useCallback(async () => {
     setDigestError(null);
@@ -140,28 +129,6 @@ export default function JournalPage() {
     loadDigest();
   }, [loadDigest]);
 
-  const loadEntries = useCallback(async () => {
-    if (isDemo) {
-      setEntries([]);
-      setEntriesLoading(false);
-      return;
-    }
-    setEntriesLoading(true);
-    try {
-      const { data } = await api.get("/api/journal/entries/");
-      const list = Array.isArray(data) ? data : data.results || [];
-      setEntries(list);
-    } catch {
-      setEntries([]);
-    } finally {
-      setEntriesLoading(false);
-    }
-  }, [isDemo]);
-
-  useEffect(() => {
-    loadEntries();
-  }, [loadEntries]);
-
   const dom = digest?.dominant_emotion && EMOTION_JOURNAL[digest.dominant_emotion]
     ? EMOTION_JOURNAL[digest.dominant_emotion]
     : EMOTION_JOURNAL.neutral;
@@ -169,36 +136,6 @@ export default function JournalPage() {
   const storyCardStyle = {
     background: dom.bg,
     borderColor: dom.border,
-  };
-
-  const onChange = (e) => {
-    const { name, value } = e.target;
-    setForm((f) => ({ ...f, [name]: value }));
-  };
-
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    if (isDemo) {
-      setError("Log in to save journal entries to your account.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const { data } = await api.post("/api/journal/entries/", {
-        title: form.title.trim() || "Untitled",
-        content: form.content.trim(),
-        mood_at_entry: form.mood_at_entry,
-        tags: [],
-      });
-      setEntries((prev) => [data, ...prev]);
-      setForm({ title: "", content: "", mood_at_entry: "neutral" });
-    } catch (err) {
-      const d = err.response?.data;
-      setError(typeof d === "object" ? JSON.stringify(d) : err.message || "Save failed.");
-    } finally {
-      setSaving(false);
-    }
   };
 
   const quickReflect = async () => {
@@ -236,17 +173,6 @@ export default function JournalPage() {
     }
   };
 
-  const generateInsights = async (id) => {
-    if (isDemo) return;
-    setError(null);
-    try {
-      const { data } = await api.post(`/api/journal/entries/${id}/generate_insights/`);
-      setEntries((prev) => prev.map((x) => (x.id === id ? data : x)));
-    } catch (e) {
-      setError(e.response?.data?.detail || e.message || "Insights failed.");
-    }
-  };
-
   const msgBarPct = Math.min(100, (digest?.messages_today || 0) * 6 + 12);
   const streakBarPct = Math.min(100, (digest?.day_streak || 0) * 10);
   const vs = digest?.vs_yesterday_messages ?? 0;
@@ -261,6 +187,11 @@ export default function JournalPage() {
           {/* Top bar — match reference */}
           <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
             <div>
+              {user ? (
+                <p className="mb-1 text-sm font-medium text-[#4A3F8F] dark:text-emerald-300/95">
+                  Hello, {greet}!
+                </p>
+              ) : null}
               <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-slate-500 dark:text-slate-400">
                 Daily emotional journal
               </p>
@@ -517,7 +448,6 @@ export default function JournalPage() {
                     <div className="mt-2.5 flex flex-wrap gap-0.5">
                       {(digest.streak_30 || []).map((cell, i) => {
                         const em = EMOTION_JOURNAL[cell.dominant_emotion] || EMOTION_JOURNAL.neutral;
-                        const short = cell.date?.slice(5)?.replace("-", "/") || "";
                         return (
                           <div
                             key={i}
@@ -599,85 +529,6 @@ export default function JournalPage() {
                   {reflectOut.reply}
                 </p>
               </div>
-            )}
-          </section>
-
-          {/* Saved entries */}
-          <section className="rounded-[18px] border border-wa-bar bg-wa-panel/30 p-5">
-            <h3 className="mb-3 text-[13px] font-medium">Save a journal entry</h3>
-            {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
-            <form onSubmit={onSubmit} className="mb-6 space-y-3">
-              <input
-                name="title"
-                value={form.title}
-                onChange={onChange}
-                placeholder="Title (optional)"
-                className="w-full rounded-xl border border-wa-bar bg-wa-bar/40 px-3 py-2 text-sm dark:bg-wa-bg"
-              />
-              <select
-                name="mood_at_entry"
-                value={form.mood_at_entry}
-                onChange={onChange}
-                className="w-full rounded-xl border border-wa-bar bg-wa-bar/40 px-3 py-2 text-sm dark:bg-wa-bg"
-              >
-                {MOODS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-              <textarea
-                name="content"
-                value={form.content}
-                onChange={onChange}
-                rows={4}
-                required
-                placeholder="Longer entry to keep in your history…"
-                className="w-full rounded-xl border border-wa-bar bg-wa-bar/40 px-3 py-2 text-sm dark:bg-wa-bg"
-              />
-              <button
-                type="submit"
-                disabled={saving || isDemo}
-                className="rounded-full border border-wa-bar bg-wa-accent/20 px-4 py-2 text-xs font-medium text-emerald-900 disabled:opacity-50 dark:text-emerald-100"
-              >
-                {saving ? "Saving…" : "Save entry"}
-              </button>
-            </form>
-
-            <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-wa-muted">
-              Your saved entries
-            </h4>
-            {entriesLoading ? (
-              <p className="text-xs text-wa-muted">Loading…</p>
-            ) : entries.length === 0 ? (
-              <p className="text-xs text-wa-muted">No saved entries yet.</p>
-            ) : (
-              <ul className="space-y-3">
-                {entries.map((e) => (
-                  <li
-                    key={e.id}
-                    className="rounded-xl border border-wa-bar bg-wa-bar/30 p-3 text-sm dark:bg-wa-panel/40"
-                  >
-                    <div className="mb-1 flex flex-wrap justify-between gap-2">
-                      <span className="font-medium">{e.title}</span>
-                      <span className="text-xs capitalize text-wa-muted">{e.mood_at_entry}</span>
-                    </div>
-                    <p className="mb-2 whitespace-pre-wrap text-xs text-wa-muted">{e.content}</p>
-                    {e.ai_insights && (
-                      <p className="mb-2 rounded-lg bg-wa-bar/40 p-2 text-xs">{e.ai_insights}</p>
-                    )}
-                    {!isDemo && (
-                      <button
-                        type="button"
-                        onClick={() => generateInsights(e.id)}
-                        className="text-[11px] text-[#4A3F8F] underline dark:text-wa-accent"
-                      >
-                        Generate AI insights
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
             )}
           </section>
         </main>

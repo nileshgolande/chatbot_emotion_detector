@@ -9,6 +9,7 @@ import { useAuth } from "../hooks/useAuth";
 /** Served from `frontend/public/` — place MP4 assets with these names (or copy from Downloads). */
 const HERO_WHATSAPP_BG_VIDEO = `${process.env.PUBLIC_URL || ""}/whatsapp-hero-background.mp4`;
 const HERO_DASHBOARD_BG_VIDEO = `${process.env.PUBLIC_URL || ""}/dashboard-hero-background.mp4`;
+const HERO_JOURNAL_BG_VIDEO = `${process.env.PUBLIC_URL || ""}/journal-insights-hero-background.mp4`;
 
 function AeroFooter() {
   const { user } = useAuth();
@@ -68,6 +69,11 @@ export default function AeroWhatsAppLanding() {
     scrollToHero();
   }, [scrollToHero]);
 
+  const onJournalInsightsFeatureClick = useCallback(() => {
+    setHeroOverrideVideoSrc(HERO_JOURNAL_BG_VIDEO);
+    scrollToHero();
+  }, [scrollToHero]);
+
   return (
     <AeroAccentProvider>
       <div className="font-landing antialiased">
@@ -77,6 +83,7 @@ export default function AeroWhatsAppLanding() {
           <AeroFeatures
             onEmotionAwareClick={onEmotionAwareFeatureClick}
             onMoodAnalyticsClick={onMoodAnalyticsFeatureClick}
+            onJournalInsightsClick={onJournalInsightsFeatureClick}
           />
         </main>
         <AeroFooter />

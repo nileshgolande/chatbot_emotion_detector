@@ -26,12 +26,18 @@ const cards = [
 const FEATURE_VIDEO_LABELS = {
   "Emotion-aware replies": "Play WhatsApp-style video in the hero background",
   "Mood analytics dashboard": "Play mood dashboard preview video in the hero background",
+  "Journal insights": "Play journal insights preview video in the hero background",
 };
 
-export default function AeroFeatures({ onEmotionAwareClick, onMoodAnalyticsClick } = {}) {
+export default function AeroFeatures({
+  onEmotionAwareClick,
+  onMoodAnalyticsClick,
+  onJournalInsightsClick,
+} = {}) {
   const actionByTitle = {
     "Emotion-aware replies": onEmotionAwareClick,
     "Mood analytics dashboard": onMoodAnalyticsClick,
+    "Journal insights": onJournalInsightsClick,
   };
 
   return (

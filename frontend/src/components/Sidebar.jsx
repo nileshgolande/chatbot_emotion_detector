@@ -40,11 +40,11 @@ export default function Sidebar() {
       <Item to="/chat" label="Chats">
         💬
       </Item>
-      <Item to="/journal" label="Journal">
-        📓
-      </Item>
       <Item to="/dashboard" label="Dashboard">
         📊
+      </Item>
+      <Item to="/journal" label="Journal">
+        📓
       </Item>
     </aside>
   );

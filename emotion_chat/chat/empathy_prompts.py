@@ -4,7 +4,7 @@ from __future__ import annotations
 # Mood → emoji palette for LangGraph replies (hints + light post-processing).
 EMOTION_EMOJI_PALETTE: dict[str, str] = {
     "happy": "💛 ✨ 🌟 🤗 🎉",
-    "sad": "🫂 💙 🌙 💜 🕯️",
+    "sad": "🫂 🌙 💜 🕯️",
     "anxious": "🌿 🫧 🌊 ✨ 🤲",
     "angry": "🕊️ 💬 🙏 🌱 💛",
     "neutral": "💬 🌤️ ✨ 💛",
@@ -12,8 +12,8 @@ EMOTION_EMOJI_PALETTE: dict[str, str] = {
 
 # Compact pair for opening when we need a guaranteed mood cue (fallback / finalize guard).
 EMOTION_LEAD_PAIR: dict[str, str] = {
-    "happy": "💛✨",
-    "sad": "🫂💙",
+    "happy": "🤗✨",
+    "sad": "🫂",
     "anxious": "🌿🫧",
     "angry": "🕊️💬",
     "neutral": "💬🌤️",
@@ -31,15 +31,14 @@ def emotion_emoji_palette_line(primary_emotion: str | None) -> str:
 
 
 def langgraph_emoji_instruction(primary_emotion: str | None) -> str:
-    """Extra system text for LangGraph so replies carry mood-matched emojis."""
+    """Extra system text for LangGraph: mood hints without forcing emojis every turn."""
     pe = (primary_emotion or "neutral").strip() or "neutral"
     palette = emotion_emoji_palette_line(pe)
     lead = emotion_lead_pair(pe)
     return (
-        f"\nEmojis for this graph turn (detected mood: {pe}):\n"
-        f"• Use 1–3 Unicode emojis that fit this mood. Good options → {palette}\n"
-        f"• You may open with {lead} or weave similar emojis into the first sentence—never a stiff header line.\n"
-        "• Keep the same sparse, human rules as above (not an emoji on every sentence).\n"
+        f"\nOptional emoji hint (mood ~{pe})—often skip entirely:\n"
+        f"• If you use any, at most 1–2 in the whole reply. Palette if helpful → {palette}\n"
+        f"• You may rarely open with {lead} only when it feels genuine; many replies should have zero emojis.\n"
     )
 
 
@@ -80,9 +79,11 @@ def empathy_core_instructions() -> str:
         "• If you see typos, read the emotion they meant (e.g. “fryustrating” → frustrating).\n\n"
         "Closing:\n"
         "• Only add a gentle question if it fits; often a simple check-in is enough. Never interrogate.\n\n"
-        "Emojis — use sparingly like a real person:\n"
-        "• Usually 0–2 per reply; at most 3 when the moment really calls for it. Never stick an emoji on every sentence.\n"
-        "• Weave one in where it feels natural, not as decoration.\n"
+        "Emojis — like a real friend texting, not a sticker bot:\n"
+        "• Often send a reply with no emoji at all—plain, warm words feel the most human.\n"
+        "• When it fits the mood, use 1 (rarely 2) small emojis in the whole message—not every reply, and never every sentence.\n"
+        "• Skip emojis on short factual or serious replies; a tiny one can land after empathy on heavier messages.\n"
+        "• Vary from message to message: if your last reply had emojis, lean plain next time unless they clearly need uplift.\n"
     )
 
 
@@ -91,6 +92,7 @@ def chat_api_hard_rules() -> str:
     return (
         "\nHard rules:\n"
         "• Do not include meta lines like “(You shared: …)” or summaries of what they typed—speak to them directly.\n"
+        "• If their message starts with [Replying to …] quoting an earlier line, treat that as context and answer the new part naturally—do not echo the tag.\n"
         "• Do not claim to be human; you are still warm and present.\n"
         "• Brevity over performance: empathy is shown through precision and warmth, not word count.\n"
         "• Stay helpful and safe.\n"

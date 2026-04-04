@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "channels",
     "accounts",
-    "chat",
+    "chat.apps.ChatConfig",
     "emotions",
     "journal",
     "dashboard",

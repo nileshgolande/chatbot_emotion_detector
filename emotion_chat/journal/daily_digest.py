@@ -16,6 +16,17 @@ logger = logging.getLogger(__name__)
 
 EMOTION_ORDER = ("happy", "sad", "anxious", "angry", "neutral")
 
+
+def user_display_label(user) -> str:
+    """Friendly name for journal / LLM context."""
+    if not user:
+        return ""
+    fn = (getattr(user, "first_name", None) or "").strip()
+    ln = (getattr(user, "last_name", None) or "").strip()
+    if fn or ln:
+        return f"{fn} {ln}".strip()
+    return (getattr(user, "username", None) or "").strip() or ""
+
 # Weights for 0–100 wellness (higher = better composite day)
 _WELL_WEIGHTS = {
     "happy": 1.0,
@@ -289,6 +300,7 @@ def build_daily_digest(user, target_date: date) -> dict[str, Any]:
     return {
         "date": target_date.isoformat(),
         "date_label": local_title,
+        "user_label": user_display_label(user),
         "quote": story["quote"],
         "write_prompt": story["write_prompt"],
         "dominant_emotion": dominant,

@@ -1,20 +1,51 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import ConversationList from "../components/chat/ConversationList";
 import ChatInterface from "../components/chat/ChatInterface";
-import { EMOTION_EMOJIS } from "../data/emotionChartTheme";
 import { useAuth } from "../hooks/useAuth";
+import { greetingName as displayGreetingName } from "../utils/greetingName";
 
 const isDraftConversationId = (id) => id != null && String(id).startsWith("local-new-");
+
+/** Same copy as server `chat.signals.WELCOME_BOT_MESSAGE` — sidebar preview starts with “Try the WhatsApp-style background”. */
+const WELCOME_BOT_CONTENT =
+  "Try the WhatsApp-style background — Hi there 💛, welcome! ✨ I'm glad you're here 🫧 Say what's on your mind when you're ready.";
+
+/** Pin “Welcome” first; then newest by created_at. */
+function sortConversationsForDisplay(list) {
+  const isWelcome = (c) => (c.title || "").trim().toLowerCase() === "welcome";
+  return [...list].sort((a, b) => {
+    if (isWelcome(a) && !isWelcome(b)) return -1;
+    if (!isWelcome(a) && isWelcome(b)) return 1;
+    const ta = new Date(a.created_at || 0).getTime();
+    const tb = new Date(b.created_at || 0).getTime();
+    return tb - ta;
+  });
+}
+
+/** WhatsApp-style: include quoted context for the model (not shown as a separate UI quote in history on server). */
+function buildMessageWithReply(rawText, replyTo) {
+  const text = (rawText || "").trim();
+  if (!text) return "";
+  if (!replyTo || !(replyTo.content || "").trim()) return text;
+  const q = (replyTo.content || "").trim().replace(/\s+/g, " ").slice(0, 220);
+  const who = replyTo.sender === "bot" ? "them" : "your earlier message";
+  return `[Replying to ${who}: "${q}"]\n${text}`;
+}
+
+function previewFromMessageBody(text) {
+  const t = text || "";
+  return t.length > 120 ? `${t.slice(0, 119)}…` : t;
+}
 
 const DEMO_CONVERSATIONS = [
   {
     id: 1,
     title: "Welcome",
-    last_message_preview: "Try the WhatsApp-style background",
+    last_message_preview: previewFromMessageBody(WELCOME_BOT_CONTENT),
     created_at: new Date().toISOString(),
   },
 ];
@@ -23,15 +54,21 @@ const DEMO_MESSAGES = [
   {
     id: 1,
     sender: "bot",
-    content:
-      "Hi there 💛 — welcome to demo mode! ✨ Your chat has the cozy wallpaper and bubbles we designed. I'm glad you're here 🫧 Whenever you're ready, say what's on your mind.",
+    content: WELCOME_BOT_CONTENT,
     created_at: new Date().toISOString(),
   },
 ];
 
 export default function ChatPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, enableDemoUser } = useAuth();
   const isDemo = user?.is_demo || localStorage.getItem("chat_demo") === "1";
+
+  // First-time visitors: no account yet — open chat in demo immediately (local replies until they sign up).
+  useEffect(() => {
+    if (authLoading) return;
+    if (localStorage.getItem("access")) return;
+    enableDemoUser();
+  }, [authLoading, enableDemoUser]);
 
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -39,6 +76,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [msgLoading, setMsgLoading] = useState(false);
   const [input, setInput] = useState("");
+  const [replyTo, setReplyTo] = useState(null);
   const [sendError, setSendError] = useState(null);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(max-width: 767px)").matches : false,
@@ -57,6 +95,10 @@ export default function ChatPage() {
     setMobileMode(selectedId ? "chat" : "list");
   }, [isMobile, selectedId]);
 
+  useEffect(() => {
+    setReplyTo(null);
+  }, [selectedId]);
+
   const loadConversations = useCallback(async () => {
     if (isDemo) {
       setConversations(DEMO_CONVERSATIONS);
@@ -68,7 +110,15 @@ export default function ChatPage() {
       const { data } = await api.get("/api/chat/conversations/");
       const list = Array.isArray(data) ? data : data.results || [];
       setConversations(list);
-      if (list.length) setSelectedId((id) => id ?? list[0].id);
+      setSendError(null);
+      setSelectedId((prev) => {
+        if (!list.length) return null;
+        const sorted = sortConversationsForDisplay(list);
+        if (prev != null && (isDraftConversationId(prev) || sorted.some((c) => c.id === prev))) {
+          return prev;
+        }
+        return sorted[0].id;
+      });
     } catch {
       setConversations(DEMO_CONVERSATIONS);
       setSelectedId((id) => id ?? 1);
@@ -143,12 +193,17 @@ export default function ChatPage() {
       const { data } = await api.get(`/api/chat/conversations/${selectedId}/messages/`);
       const list = Array.isArray(data) ? data : data.results || [];
       setMessages(list);
-    } catch {
+    } catch (err) {
+      if (!isDemo && err.response?.status === 404) {
+        setMessages([]);
+        loadConversations();
+        return;
+      }
       setMessages(isDemo ? DEMO_MESSAGES : []);
     } finally {
       setMsgLoading(false);
     }
-  }, [selectedId, isDemo]);
+  }, [selectedId, isDemo, loadConversations]);
 
   useEffect(() => {
     loadMessages();
@@ -180,30 +235,24 @@ export default function ChatPage() {
   const send = async () => {
     const text = input.trim();
     if (!selectedId || !text) return;
+    const outgoing = buildMessageWithReply(text, replyTo);
     setSendError(null);
     setInput("");
+    setReplyTo(null);
     const optimistic = {
       id: `tmp-${Date.now()}`,
       sender: "user",
-      content: text,
+      content: outgoing,
       created_at: new Date().toISOString(),
     };
     setMessages((m) => [...m, optimistic]);
 
     if (isDemo) {
       setMsgLoading(true);
-      const demoEmotion = (() => {
-        const t = text.toLowerCase();
-        if (/\b(sad|cry|depressed|hurt)\b/.test(t)) return "sad";
-        if (/\b(happy|great|love|thanks)\b/.test(t)) return "happy";
-        if (/\b(angry|furious|hate)\b/.test(t)) return "angry";
-        if (/\b(worried|anxious|stress)\b/.test(t)) return "anxious";
-        return "neutral";
-      })();
       setTimeout(() => {
         const uid = Date.now();
         const titleFromFirst =
-          text.length > 120 ? `${text.slice(0, 119)}…` : text;
+          outgoing.length > 120 ? `${outgoing.slice(0, 119)}…` : outgoing;
         setConversations((prev) =>
           prev.map((c) =>
             c.id === selectedId && (!c.title || c.title === "New chat")
@@ -216,12 +265,6 @@ export default function ChatPage() {
           {
             ...optimistic,
             id: uid,
-            emotion: {
-              primary_emotion: demoEmotion,
-              emoji: EMOTION_EMOJIS[demoEmotion] || "✨",
-              confidence: 0.75,
-              emotion_scores: { [demoEmotion]: 0.75, neutral: 0.25 },
-            },
           },
           {
             id: uid + 1,
@@ -240,9 +283,9 @@ export default function ChatPage() {
     try {
       const draft = isDraftConversationId(selectedId);
       const { data } = draft
-        ? await api.post("/api/chat/conversations/", { title: "", first_message: text })
+        ? await api.post("/api/chat/conversations/", { title: "", first_message: outgoing })
         : await api.post(`/api/chat/conversations/${selectedId}/send_message/`, {
-            content: text,
+            content: outgoing,
           });
       const list = Array.isArray(data?.messages)
         ? data.messages
@@ -272,24 +315,35 @@ export default function ChatPage() {
         );
       }
     } catch (err) {
+      const status = err.response?.status;
       const detail =
         err.response?.data?.detail ||
         (typeof err.response?.data === "string" ? err.response.data : null) ||
         err.message ||
         "Request failed";
-      console.error("send_message failed", err.response?.status, err.response?.data);
-      setSendError(typeof detail === "string" ? detail : JSON.stringify(detail));
+      console.error("send_message failed", status, err.response?.data);
+      if (status === 404) {
+        loadConversations();
+        setSendError("That conversation is gone or unavailable. Your chat list was refreshed — pick a chat and try again.");
+      } else {
+        setSendError(typeof detail === "string" ? detail : JSON.stringify(detail));
+      }
       setMessages((m) => m.filter((x) => x.id !== optimistic.id));
     } finally {
       setMsgLoading(false);
     }
   };
 
-  const active = conversations.find((c) => c.id === selectedId);
+  const displayConversations = useMemo(
+    () => sortConversationsForDisplay(conversations),
+    [conversations],
+  );
+  const active = displayConversations.find((c) => c.id === selectedId);
   const title = active?.title || "Chat";
 
   const showList = !isMobile || mobileMode === "list";
   const showChat = !isMobile || mobileMode === "chat";
+  const greet = displayGreetingName(user);
 
   return (
     <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-slate-50 text-slate-900 dark:bg-wa-bg dark:text-emerald-50">
@@ -318,7 +372,7 @@ export default function ChatPage() {
         <Sidebar />
         {showList && (
           <ConversationList
-            conversations={conversations}
+            conversations={displayConversations}
             selectedId={selectedId}
             onSelect={(id) => {
               setSelectedId(id);
@@ -332,6 +386,7 @@ export default function ChatPage() {
         {showChat && (
           <ChatInterface
             title={title}
+            greetingName={user ? greet : undefined}
             messages={messages}
             msgLoading={msgLoading}
             input={input}
@@ -342,6 +397,9 @@ export default function ChatPage() {
             onSend={send}
             showBack={isMobile}
             onBack={() => setMobileMode("list")}
+            replyTo={replyTo}
+            onReply={setReplyTo}
+            onCancelReply={() => setReplyTo(null)}
           />
         )}
       </div>

@@ -64,8 +64,8 @@ EMOTION_FALLBACK_MESSAGES: dict[str, str] = {
         "but I’m right here cheering you on and soaking up your good energy. 🌟🤗"
     ),
     "sad": (
-        "🫂💙 I’m really sorry things feel heavy right now. I hit a brief snag replying, "
-        "but you’re not alone in this moment — I’m with you. 🌙💜"
+        "🫂 I’m really sorry things feel heavy right now. I hit a brief snag replying, "
+        "but you’re not alone in this moment — I’m with you. 🌙"
     ),
     "anxious": (
         "🌿🫧 I can tell it’s a lot right now. I had a tiny delay on my end—want to take one slow breath "
@@ -76,8 +76,8 @@ EMOTION_FALLBACK_MESSAGES: dict[str, str] = {
         "working to get back so we can talk it through properly. 🙏🌱"
     ),
     "neutral": (
-        "💬🌤️ I’m here and I’m listening. Connection flickered for a second, but what you said still "
-        "matters to me—thanks for your patience. ✨💛"
+        "💬 I’m here and I’m listening. Connection flickered for a second, but what you said still "
+        "matters to me—thanks for your patience. ✨"
     ),
 }
 
@@ -265,7 +265,7 @@ def _call_gemini_one_model(
     # Gemini expects a "contents" list with role + parts.
     payload: dict[str, Any] = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": max(64, min(cap, 1024))},
+        "generationConfig": {"maxOutputTokens": max(64, min(int(cap), 8192))},
     }
 
     for api_version in GEMINI_API_VERSIONS:
@@ -337,6 +337,23 @@ def _call_gemini_one_model(
     return None
 
 
+def _messages_to_gemini_prompt(messages: list[dict[str, str]]) -> str:
+    """Flatten chat messages into one Gemini user prompt."""
+    parts: list[str] = []
+    for m in messages:
+        role = (m.get("role") or "user").strip().lower()
+        content = (m.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "system":
+            parts.append(f"Instructions:\n{content}")
+        elif role == "assistant":
+            parts.append(f"Assistant:\n{content}")
+        else:
+            parts.append(f"User:\n{content}")
+    return "\n\n".join(parts)[: LLM_MAX_CONTEXT_CHARS]
+
+
 def call_gemini(prompt: str, max_output_tokens: int | None = None) -> str | None:
     """Call Google Gemini REST API; try each GEMINI_MODEL candidate until one works."""
     api_key = gemini_api_key()
@@ -355,7 +372,10 @@ def call_gemini(prompt: str, max_output_tokens: int | None = None) -> str | None
     return None
 
 
-def call_groq_chat(messages: list[dict[str, str]]) -> str | None:
+def call_groq_chat(
+    messages: list[dict[str, str]],
+    max_tokens: int | None = None,
+) -> str | None:
     """Groq OpenAI-compatible chat completions with full message history."""
     key = groq_api_key()
     if not key:
@@ -363,10 +383,11 @@ def call_groq_chat(messages: list[dict[str, str]]) -> str | None:
         logger.warning(msg)
         print(f"[LLM] Groq failure: {msg}")
         return None
+    mt = int(max_tokens) if max_tokens is not None else CHAT_MAX_TOKENS
     body = {
         "model": GROQ_MODEL,
         "messages": messages,
-        "max_tokens": CHAT_MAX_TOKENS,
+        "max_tokens": max(32, min(mt, 8192)),
         "temperature": float(os.environ.get("GROQ_TEMPERATURE", "0.45")),
     }
     headers = {
@@ -417,7 +438,10 @@ def call_groq(prompt: str) -> str | None:
     return call_groq_chat([{"role": "user", "content": prompt}])
 
 
-def call_openrouter_chat(messages: list[dict[str, str]]) -> str | None:
+def call_openrouter_chat(
+    messages: list[dict[str, str]],
+    max_tokens: int | None = None,
+) -> str | None:
     """
     OpenRouter chat completions (free-tier models) with multi-model fallback.
     - messages: OpenAI-style chat messages, already trimmed.
@@ -430,6 +454,7 @@ def call_openrouter_chat(messages: list[dict[str, str]]) -> str | None:
         logger.warning(msg)
         print(f"[LLM] OpenRouter failure: {msg}")
         return None
+    mt = int(max_tokens) if max_tokens is not None else OPENROUTER_MAX_TOKENS
     headers = {
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
@@ -440,7 +465,7 @@ def call_openrouter_chat(messages: list[dict[str, str]]) -> str | None:
         body = {
             "model": model_id,
             "messages": messages,
-            "max_tokens": OPENROUTER_MAX_TOKENS,
+            "max_tokens": max(32, min(mt, 8192)),
             "temperature": float(os.environ.get("OPENROUTER_TEMPERATURE", "0.45")),
         }
         try:
@@ -486,6 +511,51 @@ def call_openrouter_chat(messages: list[dict[str, str]]) -> str | None:
             print(f"[LLM] OpenRouter success with model: {model_id}")
             return msg_out.strip()
 
+    return None
+
+
+def complete_chat_messages(
+    messages: list[dict[str, str]],
+    max_tokens: int | None = None,
+) -> str | None:
+    """
+    Run the same provider chain as chat (LLM_ORDER: Groq → OpenRouter → Gemini).
+    Use for journal / structured prompts. Returns None if every provider fails.
+    """
+    mt = int(max_tokens) if max_tokens is not None else CHAT_MAX_TOKENS
+    capped: list[dict[str, str]] = []
+    budget = LLM_MAX_CONTEXT_CHARS
+    used = 0
+    for m in messages:
+        role = m.get("role") or "user"
+        content = m.get("content") or ""
+        take = content[: max(0, budget - used)]
+        if not take.strip():
+            continue
+        capped.append({"role": role, "content": take})
+        used += len(take)
+    if not capped:
+        return None
+    gemini_prompt = _messages_to_gemini_prompt(capped)
+    order = LLM_ORDER or ["groq", "openrouter", "gemini"]
+    for provider in order:
+        if provider == "openrouter":
+            logger.info("Journal LLM: OpenRouter")
+            out = call_openrouter_chat(capped, max_tokens=mt)
+            if out:
+                return out
+        elif provider == "gemini":
+            logger.info("Journal LLM: Gemini")
+            out = call_gemini(gemini_prompt, max_output_tokens=mt)
+            if out:
+                return out
+        elif provider == "groq":
+            logger.info("Journal LLM: Groq")
+            out = call_groq_chat(capped, max_tokens=mt)
+            if out:
+                return out
+        else:
+            logger.warning("LLM_ORDER unknown provider %r — skipped", provider)
     return None
 
 
