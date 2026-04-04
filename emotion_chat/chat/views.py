@@ -23,6 +23,18 @@ from .serializers import (
     MessageSerializer,
 )
 
+_TITLE_MAX_LEN = 120
+
+
+def _title_from_first_message(text: str) -> str:
+    """Single-line title for sidebar from the user's opening message."""
+    t = " ".join((text or "").strip().split())
+    if not t:
+        return "New chat"
+    if len(t) <= _TITLE_MAX_LEN:
+        return t
+    return t[: _TITLE_MAX_LEN - 1] + "…"
+
 
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
@@ -48,6 +60,7 @@ class ConversationViewSet(
     mixins.ListModelMixin,
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
     permission_classes = [IsAuthenticated]
@@ -89,6 +102,11 @@ class ConversationViewSet(
             user_msg = Message.objects.create(
                 conversation=conv, sender="user", content=content
             )
+            # Name the thread from the first user message when title is still empty
+            if not (conv.title or "").strip() and conv.messages.filter(sender="user").count() == 1:
+                conv.title = _title_from_first_message(content)
+                conv.save(update_fields=["title", "updated_at"])
+
             analysis = emotion_detector.detect_emotion(content)
 
             EmotionAnalysis.objects.create(
@@ -127,7 +145,13 @@ class ConversationViewSet(
             Message.objects.create(conversation=conv, sender="bot", content=reply)
 
             msgs = conv.messages.select_related("emotion").all()
-            return Response(MessageSerializer(msgs, many=True).data)
+            conv.refresh_from_db()
+            return Response(
+                {
+                    "messages": MessageSerializer(msgs, many=True).data,
+                    "conversation": ConversationSerializer(conv).data,
+                }
+            )
         except Exception as exc:
             logger.exception("send_message failed for user=%s conv=%s", request.user_id, pk)
             detail = str(exc) if settings.DEBUG else "Could not send message. Try again."

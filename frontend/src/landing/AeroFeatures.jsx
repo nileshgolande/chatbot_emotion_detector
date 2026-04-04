@@ -23,7 +23,7 @@ const cards = [
   },
 ];
 
-export default function AeroFeatures() {
+export default function AeroFeatures({ onEmotionAwareClick } = {}) {
   return (
     <section className="relative border-t border-white/10 bg-[#075E54] py-20 md:py-28">
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#075E54_0%,#0a3d36_100%)] opacity-90" aria-hidden />

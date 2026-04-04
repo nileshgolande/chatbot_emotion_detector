@@ -212,6 +212,9 @@ CSRF_TRUSTED_ORIGINS = config(
     cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
 
+# Dashboard: max emotion points returned by mood_timeline (client may pass ?limit=).
+DASHBOARD_MOOD_TIMELINE_MAX = max(100, min(config("DASHBOARD_MOOD_TIMELINE_MAX", default=5000, cast=int), 20000))
+
 # --- Logging ---
 LOG_LEVEL = config("LOG_LEVEL", default="INFO")
 LOGGING = {

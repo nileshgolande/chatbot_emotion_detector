@@ -1,21 +1,22 @@
 import React, { useEffect, useRef } from "react";
+import { EMOTION_EMOJIS } from "../../data/emotionChartTheme";
 import { useTheme } from "../../hooks/useTheme";
 
-function timeLabel(iso) {
+/** Date + time in the user's locale (e.g. Apr 3, 2026, 3:40 AM). */
+function formatMessageDateTime(iso) {
   if (!iso) return "";
   const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
-const EMOTION_EMOJI = {
-  happy: "😊",
-  sad: "💙",
-  anxious: "🌿",
-  angry: "🕊️",
-  neutral: "💬",
-};
-
-function emotionBadge(emotion) {
+function emotionBadge(emotion, emojiFromApi) {
   if (!emotion) return null;
   const map = {
     happy: "bg-emotion-happy/20 text-emotion-happy",
@@ -25,7 +26,7 @@ function emotionBadge(emotion) {
     neutral: "bg-emotion-neutral/20 text-emotion-neutral",
   };
   const cls = map[emotion] || "bg-slate-700 text-slate-200";
-  const icon = EMOTION_EMOJI[emotion] || "✨";
+  const icon = emojiFromApi || EMOTION_EMOJIS[emotion] || "✨";
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] capitalize ${cls}`}>
       <span aria-hidden>{icon}</span>
@@ -79,6 +80,7 @@ export default function MessageList({ messages, loading }) {
         {messages.map((m) => {
           const isUser = m.sender === "user";
           const emo = m.emotion?.primary_emotion;
+          const emoIcon = m.emotion?.emoji;
           return (
             <li key={m.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
               <div
@@ -90,15 +92,26 @@ export default function MessageList({ messages, loading }) {
               >
                 {!isUser && botCompanionStrip()}
                 <p className="whitespace-pre-wrap break-words text-sm">{m.content}</p>
-                {isUser && emo && <div className="mt-1 flex items-center gap-2">{emotionBadge(emo)}</div>}
                 <div
-                  className={`mt-1 text-[10px] ${
+                  className={`mt-1 flex min-h-[1rem] items-end gap-2 text-[10px] tabular-nums ${
+                    isUser && emo ? "justify-between" : ""
+                  } ${
                     isUser
-                      ? "self-end text-right text-slate-500/80 dark:text-emerald-200/50"
-                      : "self-start text-left text-slate-500/80 dark:text-emerald-200/50"
+                      ? "text-slate-600/90 dark:text-emerald-100/70"
+                      : "text-slate-500/90 dark:text-emerald-200/60"
                   }`}
                 >
-                  {timeLabel(m.created_at)}
+                  {isUser && emo ? (
+                    <span className="min-w-0">{emotionBadge(emo, emoIcon)}</span>
+                  ) : null}
+                  <time
+                    dateTime={m.created_at || undefined}
+                    className={`shrink-0 whitespace-nowrap ${isUser && !emo ? "ml-auto" : ""} ${
+                      isUser ? "text-right" : "text-left"
+                    }`}
+                  >
+                    {formatMessageDateTime(m.created_at)}
+                  </time>
                 </div>
               </div>
             </li>

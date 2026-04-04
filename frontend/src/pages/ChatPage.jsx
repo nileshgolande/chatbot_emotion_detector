@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import ConversationList from "../components/chat/ConversationList";
 import ChatInterface from "../components/chat/ChatInterface";
+import { EMOTION_EMOJIS } from "../data/emotionChartTheme";
 import { useAuth } from "../hooks/useAuth";
 
 const DEMO_CONVERSATIONS = [
@@ -72,6 +73,42 @@ export default function ChatPage() {
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  const deleteChat = useCallback(
+    async (id) => {
+      const ok =
+        typeof window === "undefined"
+          ? true
+          : window.confirm("Delete this chat and all its messages? This cannot be undone.");
+      if (!ok) return;
+
+      if (isDemo) {
+        setConversations((prev) => {
+          const next = prev.filter((c) => c.id !== id);
+          setSelectedId((sid) => (sid === id ? next[0]?.id ?? null : sid));
+          return next;
+        });
+        return;
+      }
+      try {
+        await api.delete(`/api/chat/conversations/${id}/`);
+        setConversations((prev) => {
+          const next = prev.filter((c) => c.id !== id);
+          setSelectedId((sid) => (sid === id ? next[0]?.id ?? null : sid));
+          return next;
+        });
+      } catch (err) {
+        const detail =
+          err.response?.data?.detail ||
+          (typeof err.response?.data === "string" ? err.response.data : null) ||
+          err.message ||
+          "Could not delete chat.";
+        console.error("delete conversation failed", err.response?.status, err.response?.data);
+        window.alert(typeof detail === "string" ? detail : JSON.stringify(detail));
+      }
+    },
+    [isDemo],
+  );
 
   const loadMessages = useCallback(async () => {
     if (!selectedId) {
@@ -147,6 +184,15 @@ export default function ChatPage() {
       })();
       setTimeout(() => {
         const uid = Date.now();
+        const titleFromFirst =
+          text.length > 120 ? `${text.slice(0, 119)}…` : text;
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === selectedId && (!c.title || c.title === "New chat")
+              ? { ...c, title: titleFromFirst }
+              : c,
+          ),
+        );
         setMessages((m) => [
           ...m.filter((x) => x.id !== optimistic.id),
           {
@@ -154,6 +200,7 @@ export default function ChatPage() {
             id: uid,
             emotion: {
               primary_emotion: demoEmotion,
+              emoji: EMOTION_EMOJIS[demoEmotion] || "✨",
               confidence: 0.75,
               emotion_scores: { [demoEmotion]: 0.75, neutral: 0.25 },
             },
@@ -176,13 +223,26 @@ export default function ChatPage() {
       const { data } = await api.post(`/api/chat/conversations/${selectedId}/send_message/`, {
         content: text,
       });
-      const list = Array.isArray(data) ? data : data.results || [];
+      const list = Array.isArray(data?.messages)
+        ? data.messages
+        : Array.isArray(data)
+          ? data
+          : data?.results || [];
       setMessages(list);
       const last = list[list.length - 1];
       const preview = (last && last.content ? String(last.content) : "").slice(0, 120);
-      if (preview) {
+      const convPatch = data?.conversation;
+      if (preview || convPatch) {
         setConversations((prev) =>
-          prev.map((c) => (c.id === selectedId ? { ...c, last_message_preview: preview } : c)),
+          prev.map((c) => {
+            if (c.id !== selectedId) return c;
+            const next = { ...c };
+            if (preview) next.last_message_preview = preview;
+            if (convPatch?.title != null) next.title = convPatch.title;
+            if (convPatch?.last_message_preview != null)
+              next.last_message_preview = convPatch.last_message_preview;
+            return next;
+          }),
         );
       }
     } catch (err) {
@@ -238,6 +298,7 @@ export default function ChatPage() {
               setSelectedId(id);
               if (isMobile) setMobileMode("chat");
             }}
+            onDelete={deleteChat}
             onCreate={createChat}
             loading={loading}
           />

@@ -1,11 +1,25 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Heart, MessageCircle } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 
+function formatSignedInName(user) {
+  if (!user) return "";
+  const u = user.username != null ? String(user.username).trim() : "";
+  if (!u) return "User";
+  return u.length === 1 ? u.toUpperCase() : u.charAt(0).toUpperCase() + u.slice(1);
+}
+
 export default function AeroNavbar() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const signedInAs = user ? formatSignedInName(user) : "";
+
+  const handleLogout = () => {
+    logout();
+    navigate("/", { replace: true });
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-black/30 px-4 py-3 backdrop-blur-md md:px-8">
@@ -28,34 +42,46 @@ export default function AeroNavbar() {
           </div>
         </Link>
 
-        <nav className="flex flex-wrap items-center justify-end gap-2">
+        <nav className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">
           {user ? (
-            <Link
-              to="/chat"
-              className="rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-[#075E54] shadow-md transition hover:brightness-110"
+            <p
+              className="text-right text-[11px] leading-snug text-white/80 sm:text-sm"
+              title={user.username ? `Logged in as ${user.username}` : "Logged in"}
             >
-              Open chat
-            </Link>
-          ) : (
-            <>
-              <Link
-                to="/login"
-                className="rounded-full border border-white/25 bg-white/5 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/10"
+              <span className="text-white/65">Signed in as </span>
+              <span className="font-semibold text-[#25D366]">{signedInAs}</span>
+            </p>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {user ? (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-[#075E54] shadow-md transition hover:brightness-110"
               >
-                Login
-              </Link>
-              <Link
-                to="/register"
-                className="rounded-full px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:brightness-110"
-                style={{
-                  backgroundColor: "#128C7E",
-                  boxShadow: "0 4px 20px rgba(18, 140, 126, 0.45)",
-                }}
-              >
-                New chat
-              </Link>
-            </>
-          )}
+                Log out
+              </button>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="rounded-full border border-white/25 bg-white/5 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/10"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  className="rounded-full px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:brightness-110"
+                  style={{
+                    backgroundColor: "#128C7E",
+                    boxShadow: "0 4px 20px rgba(18, 140, 126, 0.45)",
+                  }}
+                >
+                  New chat
+                </Link>
+              </>
+            )}
+          </div>
         </nav>
       </div>
     </header>

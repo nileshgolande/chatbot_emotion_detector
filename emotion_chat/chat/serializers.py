@@ -1,6 +1,8 @@
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
+from emotions.emotion_emojis import EMOTION_EMOJIS
+
 from .models import Conversation, Message
 
 
@@ -20,6 +22,7 @@ class MessageSerializer(serializers.ModelSerializer):
             return None
         return {
             "primary_emotion": ea.primary_emotion,
+            "emoji": EMOTION_EMOJIS.get(ea.primary_emotion, "✨"),
             "confidence": ea.confidence,
             "emotion_scores": ea.emotion_scores,
         }

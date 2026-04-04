@@ -1,6 +1,17 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+
+const iconBtnClass =
+  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E9ECEF] text-[#00A87E] shadow-sm transition hover:bg-[#dee2e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00A87E]/30 dark:border dark:border-wa-bar dark:bg-wa-header dark:text-emerald-400 dark:hover:bg-wa-bar";
+
+function HomeIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10" />
+    </svg>
+  );
+}
 
 /**
  * @param {boolean} [embedded]
@@ -8,7 +19,7 @@ import { useAuth } from "../hooks/useAuth";
  * @param {() => void} [onSwitchToLogin]
  */
 export default function Register({ embedded = false, onRegistered, onSwitchToLogin } = {}) {
-  const { register } = useAuth();
+  const { register, user, loading } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     username: "",
@@ -18,6 +29,10 @@ export default function Register({ embedded = false, onRegistered, onSwitchToLog
   });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  if (!embedded && !loading && user) {
+    return <Navigate to="/chat" replace />;
+  }
 
   const onChange = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -51,75 +66,64 @@ export default function Register({ embedded = false, onRegistered, onSwitchToLog
     }
   };
 
+  const fieldClass =
+    "w-full rounded-xl border-0 bg-[#E9ECEF] px-4 py-3 text-sm text-[#1A202C] outline-none ring-0 focus:ring-2 focus:ring-[#00A87E]/35 dark:bg-wa-bar dark:text-emerald-50";
+
   const registerForm = (
     <form
       onSubmit={onSubmit}
-      className="relative w-full max-w-md space-y-3 rounded-xl border border-wa-bar bg-wa-panel p-6 pt-14 shadow-xl"
+      className="relative w-full max-w-md space-y-4 rounded-2xl bg-white p-8 pt-[4.25rem] shadow-[0_8px_32px_rgba(0,0,0,0.08)] dark:border dark:border-wa-bar dark:bg-wa-panel dark:shadow-xl"
     >
-      <div className="absolute left-3 right-3 top-3 flex items-center justify-between">
+      <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
         <button
           type="button"
           onClick={() => (onSwitchToLogin ? onSwitchToLogin() : navigate("/login"))}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-wa-bar bg-wa-header text-emerald-500 dark:text-emerald-400"
+          className={iconBtnClass}
           aria-label="Back to login"
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        {!embedded && (
-          <Link
-            to="/"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-wa-bar bg-wa-header text-emerald-500 dark:text-emerald-400"
-            aria-label="Home"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10" />
-            </svg>
-          </Link>
-        )}
+        <Link to="/" className={iconBtnClass} aria-label="Home" title="Home">
+          <HomeIcon />
+        </Link>
       </div>
 
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-emerald-50">Create account</h1>
-      {error && <p className="break-words text-sm text-red-400">{error}</p>}
+      <h1 className="text-2xl font-bold tracking-tight text-[#1A202C] dark:text-emerald-50">Create account</h1>
+      {error && <p className="break-words text-sm text-red-500 dark:text-red-400">{error}</p>}
       <div>
-        <label className="mb-1 block text-xs text-wa-muted">Username</label>
+        <label className="mb-1.5 block text-xs font-medium text-[#718096] dark:text-wa-muted">Username</label>
         <input
           name="username"
-          className="w-full rounded-md bg-wa-bar px-3 py-2 text-sm text-slate-900 outline-none ring-wa-accent focus:ring dark:text-emerald-50"
-            value={form.username}
+          className={fieldClass}
+          value={form.username}
           onChange={onChange}
           required
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-wa-muted">Email (optional)</label>
-        <input
-          name="email"
-          type="email"
-          className="w-full rounded-md bg-wa-bar px-3 py-2 text-sm text-slate-900 outline-none ring-wa-accent focus:ring dark:text-emerald-50"
-            value={form.email}
-          onChange={onChange}
-        />
+        <label className="mb-1.5 block text-xs font-medium text-[#718096] dark:text-wa-muted">Email (optional)</label>
+        <input name="email" type="email" className={fieldClass} value={form.email} onChange={onChange} />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-wa-muted">Password</label>
+        <label className="mb-1.5 block text-xs font-medium text-[#718096] dark:text-wa-muted">Password</label>
         <input
           name="password"
           type="password"
-          className="w-full rounded-md bg-wa-bar px-3 py-2 text-sm text-slate-900 outline-none ring-wa-accent focus:ring dark:text-emerald-50"
-            value={form.password}
+          className={fieldClass}
+          value={form.password}
           onChange={onChange}
           required
           minLength={8}
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-wa-muted">Confirm password</label>
+        <label className="mb-1.5 block text-xs font-medium text-[#718096] dark:text-wa-muted">Confirm password</label>
         <input
           name="password_confirm"
           type="password"
-          className="w-full rounded-md bg-wa-bar px-3 py-2 text-sm text-slate-900 outline-none ring-wa-accent focus:ring dark:text-emerald-50"
+          className={fieldClass}
           value={form.password_confirm}
           onChange={onChange}
           required
@@ -129,18 +133,22 @@ export default function Register({ embedded = false, onRegistered, onSwitchToLog
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-lg bg-wa-accent py-2 text-sm font-medium text-emerald-950 disabled:opacity-50"
+        className="w-full rounded-xl bg-[#00A87E] py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#00916d] disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
       >
         {submitting ? "Creating…" : "Register"}
       </button>
-      <p className="text-center text-xs text-wa-muted">
+      <p className="text-center text-xs text-[#718096] dark:text-wa-muted">
         Already have an account?{" "}
         {onSwitchToLogin ? (
-          <button type="button" className="text-emerald-400 hover:underline" onClick={onSwitchToLogin}>
+          <button
+            type="button"
+            className="font-semibold text-[#00A87E] hover:underline dark:text-emerald-400"
+            onClick={onSwitchToLogin}
+          >
             Log in
           </button>
         ) : (
-          <Link className="text-emerald-400 hover:underline" to="/login">
+          <Link className="font-semibold text-[#00A87E] hover:underline dark:text-emerald-400" to="/login">
             Log in
           </Link>
         )}
@@ -152,5 +160,9 @@ export default function Register({ embedded = false, onRegistered, onSwitchToLog
     return registerForm;
   }
 
-  return <div className="flex min-h-screen items-center justify-center bg-wa-bg px-4 py-10">{registerForm}</div>;
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#e8ecef] px-4 py-10 dark:bg-wa-bg">
+      {registerForm}
+    </div>
+  );
 }

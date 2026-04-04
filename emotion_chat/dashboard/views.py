@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.db.models import Count
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
@@ -78,18 +79,23 @@ class DashboardViewSet(ViewSet):
     def mood_timeline(self, request):
         """
         Per-message mood trend from all chat-derived emotion analyses (chronological).
-        Returns up to `limit` most recent points (default 2000, max 5000) so the chart stays responsive.
+        Returns up to `limit` most recent points (default 2000, capped by DASHBOARD_MOOD_TIMELINE_MAX).
         """
+        cap = getattr(settings, "DASHBOARD_MOOD_TIMELINE_MAX", 5000)
         try:
             limit = int(request.query_params.get("limit", 2000))
         except (TypeError, ValueError):
             limit = 2000
-        limit = max(1, min(limit, 5000))
+        limit = max(1, min(limit, cap))
 
-        base = EmotionAnalysis.objects.filter(user=request.user)
+        base = (
+            EmotionAnalysis.objects.filter(user=request.user)
+            .select_related("message")
+            .order_by("-created_at")
+        )
         total_in_db = base.count()
         # Newest first, then reverse so chart reads left → right in time.
-        rows = list(base.order_by("-created_at")[:limit])
+        rows = list(base[:limit])
         rows.reverse()
 
         points = [
@@ -99,6 +105,10 @@ class DashboardViewSet(ViewSet):
                 "emotion": row.primary_emotion,
                 "mood_score": float(MOOD_SCORE_BY_EMOTION.get(row.primary_emotion, 0.0)),
                 "confidence": float(row.confidence),
+                "message_preview": (row.message.content if row.message_id else "")[:500],
+                "conversation_id": getattr(row.message, "conversation_id", None)
+                if row.message_id
+                else None,
             }
             for idx, row in enumerate(rows)
         ]

@@ -1,9 +1,30 @@
 import React, { useState } from "react";
 
+function TrashIcon({ className }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      className={className}
+      aria-hidden
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+      />
+    </svg>
+  );
+}
+
 export default function ConversationList({
   conversations,
   selectedId,
   onSelect,
+  onDelete,
   onCreate,
   loading,
 }) {
@@ -40,21 +61,38 @@ export default function ConversationList({
         )}
         <ul>
           {filtered.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(c.id)}
-                className={`w-full border-b border-slate-100 px-3 py-3 text-left hover:bg-slate-50 dark:border-wa-bar/60 dark:hover:bg-wa-header/80 ${
-                  selectedId === c.id ? "bg-slate-100 dark:bg-wa-header" : ""
-                }`}
-              >
-                <p className="truncate text-sm font-medium text-slate-900 dark:text-emerald-50">
-                  {c.title || `Chat ${c.id}`}
-                </p>
-                {c.last_message_preview && (
-                  <p className="truncate text-xs text-slate-500 dark:text-wa-muted">{c.last_message_preview}</p>
+            <li key={c.id} className="group border-b border-slate-100 dark:border-wa-bar/60">
+              <div className="flex items-stretch">
+                <button
+                  type="button"
+                  onClick={() => onSelect(c.id)}
+                  className={`min-w-0 flex-1 px-3 py-3 text-left hover:bg-slate-50 dark:hover:bg-wa-header/80 ${
+                    selectedId === c.id ? "bg-slate-100 dark:bg-wa-header" : ""
+                  }`}
+                >
+                  <p className="truncate text-sm font-medium text-slate-900 dark:text-emerald-50">
+                    {c.title || `Chat ${c.id}`}
+                  </p>
+                  {c.last_message_preview && (
+                    <p className="truncate text-xs text-slate-500 dark:text-wa-muted">{c.last_message_preview}</p>
+                  )}
+                </button>
+                {onDelete && (
+                  <button
+                    type="button"
+                    title="Delete chat"
+                    aria-label={`Delete ${c.title || `chat ${c.id}`}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (typeof onDelete === "function") onDelete(c.id);
+                    }}
+                    className="shrink-0 px-2 text-slate-400 opacity-70 transition hover:bg-red-500/10 hover:text-red-600 group-hover:opacity-100 dark:text-slate-500 dark:hover:text-red-400"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
                 )}
-              </button>
+              </div>
             </li>
           ))}
         </ul>

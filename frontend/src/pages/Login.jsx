@@ -1,6 +1,17 @@
 import React, { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+
+const iconBtnClass =
+  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E9ECEF] text-[#00A87E] shadow-sm transition hover:bg-[#dee2e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00A87E]/30 dark:border dark:border-wa-bar dark:bg-wa-header dark:text-emerald-400 dark:hover:bg-wa-bar";
+
+function HomeIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9M4 10v10h6v-6h4v6h6V10" />
+    </svg>
+  );
+}
 
 export default function Login({
   embedded = false,
@@ -8,7 +19,7 @@ export default function Login({
   onSwitchToRegister,
   onBack,
 } = {}) {
-  const { login } = useAuth();
+  const { login, user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/chat";
@@ -17,6 +28,10 @@ export default function Login({
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  if (!embedded && !loading && user) {
+    return <Navigate to={from} replace />;
+  }
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -48,23 +63,19 @@ export default function Login({
     if (!embedded) navigate(-1);
   };
 
-  const handleForward = () => {
-    if (onSwitchToRegister) onSwitchToRegister();
-    else navigate("/register");
-  };
+  const fieldClass =
+    "w-full rounded-xl border-0 bg-[#E9ECEF] px-4 py-3 text-sm text-[#1A202C] outline-none ring-0 placeholder:text-slate-400 focus:ring-2 focus:ring-[#00A87E]/35 dark:bg-wa-bar dark:text-emerald-50";
 
   const form = (
     <form
       onSubmit={onSubmit}
-      className={`relative w-full max-w-md space-y-4 rounded-xl border border-wa-bar bg-wa-panel shadow-xl ${
-        embedded ? "p-6 pt-14" : "p-6 pt-14"
-      }`}
+      className="relative w-full max-w-md space-y-5 rounded-2xl bg-white p-8 pt-[4.25rem] shadow-[0_8px_32px_rgba(0,0,0,0.08)] dark:border dark:border-wa-bar dark:bg-wa-panel dark:shadow-xl"
     >
-      <div className="absolute left-3 right-3 top-3 flex items-center justify-between">
+      <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
         <button
           type="button"
           onClick={handleBack}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-wa-bar bg-wa-header text-emerald-500 transition hover:opacity-90 dark:text-emerald-400"
+          className={iconBtnClass}
           aria-label={embedded ? "Close" : "Back"}
           title={embedded ? "Close" : "Back"}
         >
@@ -72,24 +83,16 @@ export default function Login({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <button
-          type="button"
-          onClick={handleForward}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-wa-bar bg-wa-header text-emerald-500 transition hover:opacity-90 dark:text-emerald-400"
-          aria-label="Go to sign up"
-          title="Sign up"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+        <Link to="/" className={iconBtnClass} aria-label="Home" title="Home">
+          <HomeIcon />
+        </Link>
       </div>
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-emerald-50">Log in</h1>
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      <h1 className="text-2xl font-bold tracking-tight text-[#1A202C] dark:text-emerald-50">Log in</h1>
+      {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
       <div>
-        <label className="mb-1 block text-xs text-wa-muted">Username</label>
+        <label className="mb-1.5 block text-xs font-medium text-[#718096] dark:text-wa-muted">Username</label>
         <input
-          className="w-full rounded-md border border-transparent bg-wa-bar px-3 py-2 text-sm text-slate-900 outline-none ring-wa-accent focus:ring dark:text-emerald-50"
+          className={fieldClass}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           autoComplete="username"
@@ -97,10 +100,10 @@ export default function Login({
         />
       </div>
       <div>
-        <label className="mb-1 block text-xs text-wa-muted">Password</label>
+        <label className="mb-1.5 block text-xs font-medium text-[#718096] dark:text-wa-muted">Password</label>
         <input
           type="password"
-          className="w-full rounded-md border border-transparent bg-wa-bar px-3 py-2 text-sm text-slate-900 outline-none ring-wa-accent focus:ring dark:text-emerald-50"
+          className={fieldClass}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
@@ -110,18 +113,22 @@ export default function Login({
       <button
         type="submit"
         disabled={submitting}
-        className="w-full rounded-lg bg-wa-accent py-2 text-sm font-medium text-emerald-950 disabled:opacity-50"
+        className="w-full rounded-xl bg-[#00A87E] py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#00916d] disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-500"
       >
         {submitting ? "Signing in…" : "Sign in"}
       </button>
-      <p className="text-center text-xs text-wa-muted">
+      <p className="text-center text-xs text-[#718096] dark:text-wa-muted">
         No account?{" "}
         {onSwitchToRegister ? (
-          <button type="button" className="text-emerald-400 hover:underline" onClick={onSwitchToRegister}>
+          <button
+            type="button"
+            className="font-semibold text-[#00A87E] hover:underline dark:text-emerald-400"
+            onClick={onSwitchToRegister}
+          >
             Register
           </button>
         ) : (
-          <Link className="text-emerald-400 hover:underline" to="/register">
+          <Link className="font-semibold text-[#00A87E] hover:underline dark:text-emerald-400" to="/register">
             Register
           </Link>
         )}
@@ -134,7 +141,7 @@ export default function Login({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-wa-bg px-4">
+    <div className="flex min-h-screen items-center justify-center bg-[#e8ecef] px-4 dark:bg-wa-bg">
       {form}
     </div>
   );

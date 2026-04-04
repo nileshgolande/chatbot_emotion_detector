@@ -1,14 +1,25 @@
 """
-Seed one power-user account with 10 conversations, rich chat history,
-emotion analyses, daily mood summaries, journals, and journal insights.
+Seed one QA account with 10 conversations, chat history, emotion rows,
+daily mood summaries, journal entries, and journal insights.
 
-Usage:
+Usage (from folder containing manage.py):
   python manage.py seed_demo_data
 
-Re-run safe: clears prior seed-owned rows for the demo user, then recreates.
+Credentials (defaults; override via env SEED_DEMO_USERNAME / SEED_DEMO_EMAIL / SEED_DEMO_PASSWORD):
+  Username: testuser
+  Password: TestUser2026!
+  Email:    testuser@example.com
+
+Optional QA density (see .env comments):
+  SEED_DEMO_HISTORY_DAYS — spread chats across this many days (default 92, ~3 months).
+  SEED_DEMO_MAX_USER_MESSAGES — target total user messages with emotion rows after fill
+    (default 120; scenarios ~21 + synthetic “check-ins” up to this cap, max 2000).
+
+Re-run safe: clears prior seed-owned rows for that user, then recreates.
 """
 from __future__ import annotations
 
+import os
 import random
 from datetime import timedelta
 
@@ -23,9 +34,49 @@ from chat.models import Conversation, Message, UserChatMemory
 from emotions.models import DailyMoodSummary, EmotionAnalysis
 from journal.models import JournalEntry, JournalInsights
 
-DEMO_USERNAME = "demotester"
-DEMO_EMAIL = "demotester@example.com"
-DEMO_PASSWORD = "TestChat2026!Demo"
+DEMO_USERNAME = (os.environ.get("SEED_DEMO_USERNAME") or "testuser").strip()
+DEMO_EMAIL = (os.environ.get("SEED_DEMO_EMAIL") or "testuser@example.com").strip()
+DEMO_PASSWORD = os.environ.get("SEED_DEMO_PASSWORD") or "TestUser2026!"
+
+# Spread chats across this many days (default ~3 months) for dashboard "Last 3 mo" QA.
+def _env_int(key: str, default: int) -> int:
+    raw = os.environ.get(key)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return int(str(raw).strip())
+    except ValueError:
+        return default
+
+
+SEED_HISTORY_DAYS = max(7, min(_env_int("SEED_DEMO_HISTORY_DAYS", 92), 366))
+# Target total user messages with emotion rows (scenarios first, then synthetic fill). Capped for speed.
+SEED_MAX_USER_MESSAGES = max(0, min(_env_int("SEED_DEMO_MAX_USER_MESSAGES", 120), 2000))
+
+FILLER_USER_LINES: list[tuple[str, str]] = [
+    ("Quick win: cleared inbox to zero.", "happy"),
+    ("Stuck on a bug for two hours—frustrated.", "angry"),
+    ("Presentation moved; breathing easier.", "neutral"),
+    ("Can't sleep, mind racing about bills.", "anxious"),
+    ("Friend cancelled plans; feeling alone.", "sad"),
+    ("Nice walk, listened to a podcast.", "happy"),
+    ("Boss was passive-aggressive in standup.", "angry"),
+    ("Neutral day, nothing special.", "neutral"),
+    ("Deadline tomorrow, not ready.", "anxious"),
+    ("Missed my train, small things pile up.", "sad"),
+    ("Grateful for coffee and quiet morning.", "happy"),
+    ("Why is this deploy so fragile?", "angry"),
+    ("Doing laundry and meal prep.", "neutral"),
+    ("Heart racing before the call.", "anxious"),
+    ("Nostalgic song on the radio.", "sad"),
+]
+FILLER_BOT_ACKS: list[str] = [
+    "Thanks for sharing that. What's one thing that would help in the next hour?",
+    "That sounds heavy. I'm here with you.",
+    "Noted. Small steps still count.",
+    "Let's breathe through it—want a two-minute grounding prompt?",
+    "I hear you. You're allowed to feel that.",
+]
 
 
 def _scores(primary: str, rng: random.Random) -> dict:
@@ -239,15 +290,15 @@ JOURNALS = [
 
 
 class Command(BaseCommand):
-    help = "Create demotester user with rich chats, emotions, moods, and journals."
+    help = "Create testuser with ~3mo-spread chats, up to SEED_DEMO_MAX_USER_MESSAGES, moods, journals."
 
     def handle(self, *args, **options):
         rnd = random.Random(42)
 
         with transaction.atomic():
-            user, created = User.objects.get_or_create(
+            user, _ = User.objects.get_or_create(
                 username=DEMO_USERNAME,
-                defaults={"email": DEMO_EMAIL, "first_name": "Demo", "last_name": "Tester"},
+                defaults={"email": DEMO_EMAIL, "first_name": "QA", "last_name": "Tester"},
             )
             user.email = DEMO_EMAIL
             user.set_password(DEMO_PASSWORD)
@@ -276,15 +327,14 @@ class Command(BaseCommand):
                     "user_message_count": 0,
                 },
             )
-            mem.user_message_count = sum(1 for s in CHAT_SCENARIOS for t in s["turns"] if t[0] == "user")
-            mem.save(update_fields=["user_message_count", "updated_at"])
 
             now = timezone.now()
-            day_offsets: list[int] = []
 
             for conv_idx, scenario in enumerate(CHAT_SCENARIOS):
-                days_ago = min(20, conv_idx * 2 + rnd.randint(0, 1))
-                day_offsets.append(days_ago)
+                span = max(1, len(CHAT_SCENARIOS) - 1)
+                # Spread evenly across SEED_HISTORY_DAYS so "Last 3 mo" filter shows real scatter.
+                center = int((conv_idx / span) * SEED_HISTORY_DAYS)
+                days_ago = max(0, min(SEED_HISTORY_DAYS, center + rnd.randint(-3, 3)))
                 base = now - timedelta(days=days_ago, hours=rnd.randint(8, 16), minutes=rnd.randint(0, 55))
 
                 conv = Conversation.objects.create(
@@ -300,7 +350,14 @@ class Command(BaseCommand):
                     },
                 )
                 t_cursor = base
-                for role, text, emo in scenario["turns"]:
+                for turn in scenario["turns"]:
+                    if len(turn) == 2:
+                        role, text = turn
+                        emo = "neutral"
+                    elif len(turn) == 3:
+                        role, text, emo = turn
+                    else:
+                        raise ValueError(f"Each turn must be (role, text) or (role, text, emotion); got {turn!r}")
                     msg = Message.objects.create(conversation=conv, sender=role, content=text)
                     Message.objects.filter(pk=msg.pk).update(created_at=t_cursor, updated_at=t_cursor)
                     if role == "user":
@@ -320,8 +377,57 @@ class Command(BaseCommand):
 
                 Conversation.objects.filter(pk=conv.pk).update(created_at=base, updated_at=t_cursor)
 
-            # Daily mood summaries: last 14 days (real aggregates where messages exist, else synthetic for charts)
-            for i in range(14):
+            scenario_user_msgs = EmotionAnalysis.objects.filter(user=user).count()
+            need_fill = max(0, SEED_MAX_USER_MESSAGES - scenario_user_msgs)
+            if need_fill > 0:
+                fill_conv = Conversation.objects.create(
+                    user=user,
+                    title="Mood check-ins (seed — last 3 months)",
+                    agent_relationship_stage="acquaintance",
+                    empathy_effectiveness=0.72,
+                    user_satisfaction=0.7,
+                    agent_metadata={"seed": True, "filler": True, "history_days": SEED_HISTORY_DAYS},
+                )
+                fill_base = now - timedelta(days=SEED_HISTORY_DAYS, hours=12)
+                Conversation.objects.filter(pk=fill_conv.pk).update(created_at=fill_base, updated_at=now)
+                t_last = fill_base
+                for i in range(need_fill):
+                    days_ago = rnd.randint(0, SEED_HISTORY_DAYS)
+                    t_user = now - timedelta(
+                        days=days_ago,
+                        hours=rnd.randint(7, 22),
+                        minutes=rnd.randint(0, 59),
+                        seconds=min(59, i * 2),
+                    )
+                    if t_user <= t_last:
+                        t_user = t_last + timedelta(seconds=30 + rnd.randint(0, 120))
+                    text, emo = FILLER_USER_LINES[i % len(FILLER_USER_LINES)]
+                    u_msg = Message.objects.create(conversation=fill_conv, sender="user", content=text)
+                    Message.objects.filter(pk=u_msg.pk).update(created_at=t_user, updated_at=t_user)
+                    primary = emo if emo in dict(EmotionAnalysis.EMOTION_CHOICES) else "neutral"
+                    conf = round(0.55 + rnd.uniform(0, 0.38), 2)
+                    ea = EmotionAnalysis.objects.create(
+                        user=user,
+                        message=u_msg,
+                        primary_emotion=primary,
+                        emotion_scores=_scores(primary, rnd),
+                        emotion_vector=None,
+                        confidence=conf,
+                    )
+                    EmotionAnalysis.objects.filter(pk=ea.pk).update(created_at=t_user)
+                    t_last = t_user + timedelta(minutes=rnd.randint(1, 8))
+                    ack = FILLER_BOT_ACKS[i % len(FILLER_BOT_ACKS)]
+                    b_msg = Message.objects.create(conversation=fill_conv, sender="bot", content=ack)
+                    Message.objects.filter(pk=b_msg.pk).update(created_at=t_last, updated_at=t_last)
+                    t_last += timedelta(minutes=rnd.randint(2, 15))
+
+                Conversation.objects.filter(pk=fill_conv.pk).update(updated_at=t_last)
+
+            mem.user_message_count = EmotionAnalysis.objects.filter(user=user).count()
+            mem.save(update_fields=["user_message_count", "updated_at"])
+
+            # Daily mood summaries across the same window (real aggregates where messages exist, else synthetic)
+            for i in range(SEED_HISTORY_DAYS + 1):
                 d = timezone.localdate() - timedelta(days=i)
                 agg = EmotionAnalysis.objects.filter(user=user, created_at__date=d)
                 n = agg.count()
@@ -350,7 +456,7 @@ class Command(BaseCommand):
                 )
 
             for j_idx, j in enumerate(JOURNALS):
-                created = timezone.now() - timedelta(days=j_idx * 2, hours=3 + j_idx)
+                journal_ts = timezone.now() - timedelta(days=j_idx * 2, hours=3 + j_idx)
                 entry = JournalEntry(
                     user=user,
                     title=j["title"],
@@ -360,7 +466,7 @@ class Command(BaseCommand):
                     tags=j["tags"],
                 )
                 entry.save()
-                JournalEntry.objects.filter(pk=entry.pk).update(created_at=created, updated_at=created)
+                JournalEntry.objects.filter(pk=entry.pk).update(created_at=journal_ts, updated_at=journal_ts)
 
             today = timezone.localdate()
             week_start = today - timedelta(days=today.weekday())
