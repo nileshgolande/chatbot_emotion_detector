@@ -27,11 +27,12 @@ class ChatGraphState(TypedDict, total=False):
     user_input: str
     primary_emotion: str | None
     history: list[Any]
+    memory_context: str | None
     reply: str
 
 
 def _node_prepare_context(state: ChatGraphState) -> dict[str, Any]:
-    """Normalize emotion hint; optional place for RAG / memory loading later."""
+    """Normalize emotion hint and pass through per-user memory text for the LLM."""
     raw = state.get("primary_emotion")
     pe = None
     if raw is not None:
@@ -40,7 +41,10 @@ def _node_prepare_context(state: ChatGraphState) -> dict[str, Any]:
     hist = state.get("history")
     if hist is None:
         hist = []
-    return {"primary_emotion": pe, "history": hist}
+    mc = state.get("memory_context")
+    if mc is not None:
+        mc = str(mc).strip() or None
+    return {"primary_emotion": pe, "history": hist, "memory_context": mc}
 
 
 def _node_generate(state: ChatGraphState) -> dict[str, Any]:
@@ -51,6 +55,7 @@ def _node_generate(state: ChatGraphState) -> dict[str, Any]:
         text,
         state.get("primary_emotion"),
         history=state.get("history"),
+        memory_context=state.get("memory_context"),
     )
     return {"reply": reply}
 
@@ -80,6 +85,7 @@ def run_chat_graph(
     user_input: str,
     primary_emotion: str | None = None,
     history: list[Any] | None = None,
+    memory_context: str | None = None,
 ) -> str:
     """
     Run the compiled graph and return the assistant reply string.
@@ -90,18 +96,26 @@ def run_chat_graph(
     text = (user_input or "").strip()
     hist = history if history is not None else []
 
+    mc = (memory_context or "").strip() or None
+
     if not _USE_GRAPH:
-        return get_llm_response(text, primary_emotion, history=hist)
+        return get_llm_response(
+            text,
+            primary_emotion,
+            history=hist,
+            memory_context=mc,
+        )
 
     out = _compiled_graph().invoke(
         {
             "user_input": text,
             "primary_emotion": primary_emotion,
             "history": hist,
+            "memory_context": mc,
         }
     )
     reply = (out.get("reply") or "").strip()
     if reply:
         return reply
     logger.warning("LangGraph returned empty reply; using direct LLM fallback")
-    return get_llm_response(text, primary_emotion, history=hist)
+    return get_llm_response(text, primary_emotion, history=hist, memory_context=mc)

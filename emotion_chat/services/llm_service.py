@@ -563,6 +563,7 @@ def get_llm_response(
     user_input: str,
     primary_emotion: str | None = None,
     history: list[Any] | None = None,
+    memory_context: str | None = None,
 ) -> str:
     """
     Build chat prompt; try providers in LLM_ORDER (default: Groq → OpenRouter → Gemini).
@@ -574,7 +575,7 @@ def get_llm_response(
 
     # Trim raw text defensively.
     text = text[:6000]
-    system_prompt = build_chat_system_prompt(primary_emotion)
+    system_prompt = build_chat_system_prompt(primary_emotion, memory_context)
     final_prompt = system_prompt + "\n\nUser:\n" + text
 
     try:
