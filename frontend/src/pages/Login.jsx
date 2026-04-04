@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import BrandWordmark from "../components/BrandWordmark";
 
 const iconBtnClass =
   "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E9ECEF] text-[#00A87E] shadow-sm transition hover:bg-[#dee2e6] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00A87E]/30 dark:border dark:border-wa-bar dark:bg-wa-header dark:text-emerald-400 dark:hover:bg-wa-bar";
@@ -141,7 +142,13 @@ export default function Login({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#e8ecef] px-4 dark:bg-wa-bg">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#e8ecef] px-4 pb-8 pt-6 dark:bg-wa-bg">
+      <Link to="/" className="mb-6 flex items-center gap-2.5">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#075E54] text-sm font-bold text-white shadow-md ring-1 ring-slate-200/60">
+          E
+        </span>
+        <BrandWordmark variant="panel" />
+      </Link>
       {form}
     </div>
   );

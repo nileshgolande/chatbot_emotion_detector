@@ -23,7 +23,17 @@ const cards = [
   },
 ];
 
-export default function AeroFeatures({ onEmotionAwareClick } = {}) {
+const FEATURE_VIDEO_LABELS = {
+  "Emotion-aware replies": "Play WhatsApp-style video in the hero background",
+  "Mood analytics dashboard": "Play mood dashboard preview video in the hero background",
+};
+
+export default function AeroFeatures({ onEmotionAwareClick, onMoodAnalyticsClick } = {}) {
+  const actionByTitle = {
+    "Emotion-aware replies": onEmotionAwareClick,
+    "Mood analytics dashboard": onMoodAnalyticsClick,
+  };
+
   return (
     <section className="relative border-t border-white/10 bg-[#075E54] py-20 md:py-28">
       <div className="absolute inset-0 bg-[linear-gradient(180deg,#075E54_0%,#0a3d36_100%)] opacity-90" aria-hidden />
@@ -37,30 +47,52 @@ export default function AeroFeatures({ onEmotionAwareClick } = {}) {
         </p>
 
         <div className="mt-14 grid gap-6 md:grid-cols-3">
-          {cards.map(({ title, body, Icon, glow }, i) => (
-            <motion.article
-              key={title}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-40px" }}
-              transition={{ delay: i * 0.1, duration: 0.5 }}
-              className="group rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-xl backdrop-blur-sm transition hover:border-[#25D366]/40 hover:bg-white/[0.09]"
-            >
-              <div
-                className={`mb-5 inline-flex rounded-2xl bg-[#128C7E]/50 p-4 ${
-                  glow ? "shadow-[0_0_28px_rgba(37,211,102,0.45)]" : ""
+          {cards.map(({ title, body, Icon, glow }, i) => {
+            const onCardAction = actionByTitle[title];
+            const isInteractive = typeof onCardAction === "function";
+            return (
+              <motion.article
+                key={title}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-40px" }}
+                transition={{ delay: i * 0.1, duration: 0.5 }}
+                role={isInteractive ? "button" : undefined}
+                tabIndex={isInteractive ? 0 : undefined}
+                onClick={isInteractive ? onCardAction : undefined}
+                onKeyDown={
+                  isInteractive
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onCardAction();
+                        }
+                      }
+                    : undefined
+                }
+                aria-label={isInteractive ? FEATURE_VIDEO_LABELS[title] : undefined}
+                className={`group rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-xl backdrop-blur-sm transition hover:border-[#25D366]/40 hover:bg-white/[0.09] ${
+                  isInteractive
+                    ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366] focus-visible:ring-offset-2 focus-visible:ring-offset-[#075E54]"
+                    : ""
                 }`}
               >
-                <Icon
-                  className={`h-8 w-8 ${glow ? "text-[#25D366] drop-shadow-[0_0_12px_rgba(37,211,102,0.85)]" : "text-[#25D366]"}`}
-                  strokeWidth={2.5}
-                  aria-hidden
-                />
-              </div>
-              <h3 className="text-lg font-bold text-white">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-white/70">{body}</p>
-            </motion.article>
-          ))}
+                <div
+                  className={`mb-5 inline-flex rounded-2xl bg-[#128C7E]/50 p-4 ${
+                    glow ? "shadow-[0_0_28px_rgba(37,211,102,0.45)]" : ""
+                  }`}
+                >
+                  <Icon
+                    className={`h-8 w-8 ${glow ? "text-[#25D366] drop-shadow-[0_0_12px_rgba(37,211,102,0.85)]" : "text-[#25D366]"}`}
+                    strokeWidth={2.5}
+                    aria-hidden
+                  />
+                </div>
+                <h3 className="text-lg font-bold text-white">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-white/70">{body}</p>
+              </motion.article>
+            );
+          })}
         </div>
       </div>
     </section>

@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useTheme } from "../hooks/useTheme";
+import BrandWordmark from "./BrandWordmark";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -10,11 +11,11 @@ export default function Navbar() {
 
   return (
     <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 text-slate-900 dark:border-wa-bar dark:bg-wa-header dark:text-emerald-50">
-      <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
+      <Link to="/" className="flex items-center gap-2.5">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#075E54] text-xs font-bold text-white shadow-sm ring-1 ring-slate-200/80 dark:ring-wa-bar">
           E
         </span>
-        <span>Emotion Chat</span>
+        <BrandWordmark variant="panel" />
       </Link>
       <nav className="flex items-center gap-3 text-sm">
         {user && (

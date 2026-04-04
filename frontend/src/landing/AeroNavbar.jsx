@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Heart, MessageCircle } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
+import BrandWordmark from "../components/BrandWordmark";
 
 function formatSignedInName(user) {
   if (!user) return "";
@@ -36,10 +37,7 @@ export default function AeroNavbar() {
               <Heart className="h-2.5 w-2.5 fill-current text-[#075E54]" strokeWidth={0} />
             </motion.span>
           </span>
-          <div className="leading-tight">
-            <p className="text-sm font-bold tracking-tight text-white">Aero-WhatsApp</p>
-            <p className="text-[10px] font-medium uppercase tracking-widest text-white/50">Emotion AI</p>
-          </div>
+          <BrandWordmark variant="landing" />
         </Link>
 
         <nav className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">

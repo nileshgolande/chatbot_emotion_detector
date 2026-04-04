@@ -2,18 +2,12 @@ import React, { useEffect, useRef } from "react";
 import { EMOTION_EMOJIS } from "../../data/emotionChartTheme";
 import { useTheme } from "../../hooks/useTheme";
 
-/** Date + time in the user's locale (e.g. Apr 3, 2026, 3:40 AM). */
-function formatMessageDateTime(iso) {
+/** Time only in the user's locale (e.g. 3:40 AM). */
+function formatMessageTime(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 function emotionBadge(emotion, emojiFromApi) {
@@ -110,7 +104,7 @@ export default function MessageList({ messages, loading }) {
                       isUser ? "text-right" : "text-left"
                     }`}
                   >
-                    {formatMessageDateTime(m.created_at)}
+                    {formatMessageTime(m.created_at)}
                   </time>
                 </div>
               </div>

@@ -65,7 +65,7 @@ export default function AeroHero({ overrideVideoSrc = null } = {}) {
       onMouseEnter={() => !showOverrideVideo && setCarouselPaused(true)}
       onMouseLeave={() => !showOverrideVideo && setCarouselPaused(false)}
     >
-      {/* Hero background: optional full-bleed video from "Emotion-aware replies" card, else carousel */}
+      {/* Hero background: optional full-bleed video from feature cards (emotion / mood analytics), else carousel */}
       <div className="absolute inset-0 z-0 bg-[#0a1628]">
         {showOverrideVideo ? (
           <div className="absolute inset-0">
