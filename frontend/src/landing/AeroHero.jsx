@@ -259,22 +259,16 @@ export default function AeroHero({ overrideVideoSrc = null } = {}) {
           ) : (
             <>
               <Link
-                to="/chat"
+                to="/register"
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-8 py-3.5 text-sm font-bold text-[#075E54] shadow-[0_8px_32px_rgba(37,211,102,0.45)] transition hover:brightness-105 active:scale-[0.98] sm:min-w-[200px] sm:py-4"
               >
-                Start chatting
+                Create account
                 <span
                   className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#075E54]/12 text-base"
                   aria-hidden
                 >
                   ➤
                 </span>
-              </Link>
-              <Link
-                to="/register"
-                className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15 sm:py-4"
-              >
-                Create account
               </Link>
               <Link
                 to="/login"

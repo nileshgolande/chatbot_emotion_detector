@@ -69,19 +69,13 @@ export default function AeroNavbar() {
                 </Link>
                 <Link
                   to="/register"
-                  className="rounded-full border border-white/25 bg-white/5 px-4 py-2 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/10"
-                >
-                  Sign up
-                </Link>
-                <Link
-                  to="/chat"
                   className="rounded-full px-4 py-2 text-sm font-semibold text-[#075E54] shadow-lg transition hover:brightness-110"
                   style={{
                     backgroundColor: "#25D366",
                     boxShadow: "0 4px 20px rgba(37, 211, 102, 0.45)",
                   }}
                 >
-                  Start chatting
+                  Sign up
                 </Link>
               </>
             )}

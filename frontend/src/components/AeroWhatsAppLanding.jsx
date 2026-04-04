@@ -40,9 +40,6 @@ function AeroFooter() {
             <Link to="/register" className="text-[#25D366] hover:underline">
               Register
             </Link>
-            <Link to="/chat" className="text-[#25D366] hover:underline">
-              Chat
-            </Link>
           </>
         )}
       </div>
