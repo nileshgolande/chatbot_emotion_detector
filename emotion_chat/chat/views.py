@@ -10,7 +10,7 @@ from rest_framework.response import Response
 
 from emotions.emotion_detector import emotion_detector
 from emotions.models import EmotionAnalysis
-from services.llm_service import get_llm_response
+from .langgraph_chat import run_chat_graph
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ def _send_message_payload(request, conv: Conversation, content: str) -> dict:
     )
     prior.reverse()
 
-    reply = get_llm_response(
+    reply = run_chat_graph(
         content,
         analysis.get("primary_emotion"),
         history=prior,
@@ -109,7 +109,7 @@ def llm_response_view(request):
         return Response({"detail": "message required"}, status=status.HTTP_400_BAD_REQUEST)
     analysis = emotion_detector.detect_emotion(user_input)
     return Response(
-        {"response": get_llm_response(user_input, analysis.get("primary_emotion"))}
+        {"response": run_chat_graph(user_input, analysis.get("primary_emotion"))}
     )
 
 
