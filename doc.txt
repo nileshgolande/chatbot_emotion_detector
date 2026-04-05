@@ -44,12 +44,24 @@ Scope: Source code under emotion_chat/ and frontend/src/ — not node_modules,
          → save Message (user)
          → emotion_detector.detect_emotion() → EmotionAnalysis row
          → transaction.on_commit → background thread update_daily_mood(user)
-         → last 5 prior messages as history
-         → run_chat_graph(text, emotion, history)
-              → LangGraph: prepare_context → generate node → get_llm_response()
-              → LLM_ORDER providers in llm_service
+         → extract_and_merge_memory(user, text) → updates UserChatMemory (name
+           heuristics, “remember that …” facts, message counts) in Postgres
+         → memory_ctx = build_llm_user_context(user) → formatted memory block +
+           DB “account snapshot” (conversation counts, message totals, latest mood)
+         → last 5 prior messages as history (current thread only)
+         → run_chat_graph(text, emotion, history, memory_context=memory_ctx)
+              → LangGraph: prepare_context passes memory_context through state
+              → generate node → get_llm_response(..., memory_context=...)
+              → build_chat_system_prompt(primary_emotion, memory_context) appends
+                 user-specific context before hard rules
+              → LLM_ORDER providers in llm_service (Gemini / Groq / OpenRouter
+                 with multi-key and multi-model fallbacks; see §4.5)
          → save Message (bot)
          → return serialized messages + conversation
+
+  Same memory injection applies to GET/POST /api/chat/llm/ (llm_response_view):
+    detect_emotion → extract_and_merge_memory → build_llm_user_context →
+    run_chat_graph(..., memory_context=...) (no conversation Message row there).
 
 ================================================================================
 3. REPOSITORY LAYOUT (TOP LEVEL)
@@ -125,7 +137,20 @@ Scope: Source code under emotion_chat/ and frontend/src/ — not node_modules,
     • Message: FK conversation, sender user|bot, content, timestamps. Ordered
       by created_at.
     • UserChatMemory: OneToOne user — preferred_name, facts JSON, recent_emotions,
-      message count (extensible “memory” for future RAG/agents).
+      user_message_count, updated_at. Maintained by chat/user_memory.py
+      (extract_and_merge_memory) from user text patterns; read back into the LLM
+      each turn via build_llm_user_context (cross-thread “one companion” behavior).
+
+  user_memory.py
+    • extract_and_merge_memory(user, message_text): after each user turn, updates
+      UserChatMemory (get_or_create) — increments counts, parses phrases like
+      “my name is / call me / I’m …” for preferred_name, “remember that …” lines
+      into capped facts list.
+    • format_memory_for_prompt(mem): turns DB memory into system-prompt-ready text.
+    • build_account_snapshot(user): aggregates from DB (username, date_joined,
+      conversation count, total messages, user-sent count, latest emotion label).
+    • build_llm_user_context(user): joins memory block + snapshot for the model
+      (answers “what’s my name?”, “what data do you have?”, stats-style questions).
 
   serializers.py
     • MessageSerializer: id, sender, content, emotion (SerializerMethodField),
@@ -149,27 +174,34 @@ Scope: Source code under emotion_chat/ and frontend/src/ — not node_modules,
     • chat_api_hard_rules(): no meta “You shared” lines, reply-context rule,
       safety.
     • emotion_guidance(emotion): short bullet per mood bucket.
-    • build_chat_system_prompt(primary_emotion): concatenates the above for HTTP
-      chat. Used by llm_service.get_llm_response.
+    • build_chat_system_prompt(primary_emotion, memory_context=None): concatenates
+      empathy + emotion hint + optional “User-specific context …” block (memory
+      + account snapshot) + hard rules. Used by llm_service.get_llm_response.
 
   langgraph_chat.py
-    • ChatGraphState (TypedDict): user_input, primary_emotion, history, reply.
+    • ChatGraphState (TypedDict): user_input, primary_emotion, history,
+      memory_context, reply.
     • _USE_GRAPH from env USE_LANGGRAPH_CHAT (default on).
-    • _node_prepare_context: normalizes emotion string; ensures history list.
-    • _node_generate: calls services.llm_service.get_llm_response.
+    • _node_prepare_context: normalizes emotion string; ensures history list;
+      passes through memory_context for the LLM.
+    • _node_generate: calls services.llm_service.get_llm_response with
+      memory_context from state.
     • _build_graph / _compiled_graph: StateGraph START→prepare→generate→END.
-    • run_chat_graph(...): if graph disabled, direct get_llm_response; else
-      invoke compiled graph; empty reply falls back to get_llm_response.
+    • run_chat_graph(..., memory_context=None): if graph disabled, direct
+      get_llm_response(with memory_context); else invoke compiled graph with
+      memory_context in initial state; empty reply falls back to get_llm_response.
 
   views.py
     • _send_message_payload(request, conv, content): core chat transaction
       helper — validates content, creates user Message, maybe sets title from
       first user line, detect_emotion, EmotionAnalysis.create, schedules
-      update_daily_mood after commit, builds history (5 msgs excluding current),
-      run_chat_graph, bot Message, returns serialized messages + conversation.
+      update_daily_mood after commit, extract_and_merge_memory +
+      build_llm_user_context, builds history (5 msgs excluding current), run_chat_graph(…,
+      memory_context=…), bot Message, returns serialized messages + conversation.
     • _title_from_first_message: whitespace-normalized title ≤120 chars.
     • llm_response_view (GET/POST /api/chat/llm/): bare “ask LLM” for auth
-      users; emotion detect + run_chat_graph (no history in this endpoint).
+      users; emotion detect + extract_and_merge_memory + build_llm_user_context +
+      run_chat_graph(..., memory_context=...) (no conversation-scoped history).
     • ConversationViewSet:
         - List/retrieve/destroy user’s conversations.
         - create: optional atomic path with first_message → _send_message_payload.
@@ -190,30 +222,49 @@ Scope: Source code under emotion_chat/ and frontend/src/ — not node_modules,
 
 4.5 services/llm_service.py
 ----------------------------
-  Responsibility: multi-provider LLM calls with env-driven LLM_ORDER (default
-  groq → openrouter → gemini). No LangChain client classes — raw HTTP via
-  requests where applicable.
+  Responsibility: “bulletproof” multi-provider chat — raw HTTP via requests, no
+  LangChain client classes. Tries multiple API keys per provider (GEMINI_API_KEY,
+  GEMINI_API_KEY_2…, same pattern for GROQ_*, OPENROUTER_*) and multiple model IDs
+  per provider until something succeeds.
 
-  Key helpers (non-exhaustive internals):
-    • _strip_env_value, gemini_api_key, groq_api_key, openrouter_api_key
-    • _invalid_*_key: rejects empty/placeholder keys with “...”
-    • gemini_model_candidates: parses GEMINI_MODEL comma list
-    • _safe_json: response.json() with logging
-    • _sanitize_llm_text: strips “(You shared: …)” style meta from model output
-    • _build_chat_messages(user_input, history, system_prompt): OpenAI-style
-      message list with last 5 history turns mapped user/assistant from Message
-      or dict
-    • _call_gemini_one_model, _messages_to_gemini_prompt, call_gemini
-    • call_groq_chat(messages, max_tokens?), call_groq(single user string)
-    • call_openrouter_chat: tries OPENROUTER_MODELS list
-    • complete_chat_messages(messages, max_tokens?): same order as chat but for
-      journal — used by journal_ai_insights.JournalAIInsights
-    • get_llm_response(user_input, primary_emotion, history): builds system prompt
-      via build_chat_system_prompt; loops providers; on total failure returns
-      EMOTION_FALLBACK_MESSAGES[primary]
+  Provider order: env LLM_ORDER (comma-separated: gemini, groq, openrouter).
+  Default in code is gemini → groq → openrouter (override in .env e.g.
+  groq,openrouter,gemini for lower latency when Groq quota is healthy).
 
-  Connection: imported by chat/langgraph_chat (generate node), journal
-  journal_ai_insights, emotions emotion_detector (optional call_gemini for refine).
+  Model lists (edit in module or extend logic as needed):
+    • GEMINI_FREE_MODELS — tries each model × each Gemini key × API versions v1beta/v1
+    • GROQ_FREE_MODELS — tries each model id with each Groq key (OpenAI-compatible URL)
+    • OPENROUTER_FREE_MODELS — long :free-tier list; some endpoints retire often
+
+  Reliability helpers:
+    • _classify_error(status, body): rate limit vs expired key vs bad model vs
+      bad request (e.g. provider rejects separate system role)
+    • _merge_system_into_user(messages): merges system instructions into the first
+      user turn — used by OpenRouter path when a normal system message fails
+    • call_openrouter_chat: for each key, for each model, tries original messages
+      then merged variant when applicable
+    • call_gemini(prompt), call_groq_chat(messages): rotate keys/models internally
+    • _build_chat_messages, _messages_to_gemini_prompt: chat transcript + system
+    • _sanitize_llm_text: strips “(You shared: …)” style meta from outputs
+    • get_llm_response(user_input, primary_emotion, history, memory_context=None):
+      builds system prompt via build_chat_system_prompt(primary_emotion,
+      memory_context); runs provider chain; optionally retries reverse order;
+      on total failure logs loudly and returns EMOTION_FALLBACK_MESSAGES[emotion]
+    • complete_chat_messages(messages, max_tokens?): same provider routing for
+      journal — journal_ai_insights.JournalAIInsights
+
+  Operational notes: if every provider fails (expired Gemini key, Groq daily TPD
+  429, OpenRouter “no endpoints” / free-tier limits), the API still returns 200
+  with short “technical hiccup” fallback text — fix keys and quotas, watch
+  server logs for HTTP status lines.
+
+  Connection: chat/langgraph_chat (generate node), journal/journal_ai_insights,
+  emotions/emotion_detector (optional Gemini refine when EMOTION_LLM_REFINE=1).
+
+  File hygiene: if you see a long block of # -commented legacy code above the
+  active module docstring, delete everything above the opening """ docstring
+  that precedes from __future__ import annotations so only one implementation
+  remains (avoids confusion and accidental edits inside comments).
 
 4.6 emotions/
 --------------
@@ -339,8 +390,11 @@ Scope: Source code under emotion_chat/ and frontend/src/ — not node_modules,
 5.5 src/context/AuthContext.jsx
 ---------------------------------
   State: user, loading.
-  refreshProfile: no token → null; chat_demo flag → demo user; else GET
-    /api/auth/profile/me/.
+  refreshProfile: should treat a real JWT as the source of truth — if access
+    token exists, clear any stale localStorage chat_demo="1" before GET
+    /api/auth/profile/me/ so a logged-in user is never stuck in demo mode.
+    If there is no token: optionally set demo user only when chat_demo=1,
+    else null (recommended pattern; match implementation in repo).
   login POST /api/auth/token/ → store tokens, fetch profile.
   register POST /api/auth/register/ or fallback login.
   logout clears storage.
@@ -463,9 +517,16 @@ Scope: Source code under emotion_chat/ and frontend/src/ — not node_modules,
 6. CONFIGURATION YOU TOUCH OFTEN
 ================================================================================
   emotion_chat/.env (not in git): DATABASE_URL/DB_*, SECRET_KEY, CORS,
-    GROQ_API_KEY, OPENROUTER_API_KEY, GEMINI or GOOGLE keys, LLM_ORDER,
-    CHAT_MAX_TOKENS, EMOTION_COMPUTE_EMBEDDING, USE_LANGGRAPH_CHAT, optional
-    JOURNAL_* token caps, seed demo env vars.
+    GROQ_API_KEY (+ optional GROQ_API_KEY_2 … _5 for rotation),
+    OPENROUTER_API_KEY (+ _2 … _5),
+    GEMINI_API_KEY or GOOGLE_API_KEY (+ GEMINI_API_KEY_2 … _5),
+    LLM_ORDER (e.g. groq,openrouter,gemini), LLM_HTTP_TIMEOUT, LLM_MAX_CONTEXT_CHARS,
+    CHAT_MAX_TOKENS / OPENROUTER_MAX_TOKENS, GROQ_TEMPERATURE, OPENROUTER_TEMPERATURE,
+    OPENROUTER_REFERRER, EMOTION_COMPUTE_EMBEDDING, USE_LANGGRAPH_CHAT,
+    EMOTION_LLM_REFINE (off by default), optional JOURNAL_* caps, seed demo vars.
+
+  Postgres: requires Python package pgvector for INSTALLED_APPS "pgvector.django"
+    and emotions.VectorField — pip install pgvector in the same venv as runserver.
 
   frontend: REACT_APP_API_URL — empty string means same-origin + CRA proxy to
     Django in development.
@@ -475,11 +536,37 @@ Scope: Source code under emotion_chat/ and frontend/src/ — not node_modules,
 ================================================================================
   • More LangGraph nodes: edit chat/langgraph_chat.py — add retrieval from
     pgvector, tool nodes, conditional edges — then call same get_llm_response
-    or new chains.
+    (pass memory_context through state) or new chains.
+  • Richer memory: extend user_memory.py (more extractors, summarization jobs) or
+    feed retrieved Message snippets into memory_context with a size cap.
   • Real WebSockets: add consumers under a new app, append routes in
     emotion_chat/routing.py.
   • Vector search: enable EMOTION_COMPUTE_EMBEDDING and add queryset filters
     using pgvector distance in Django ORM.
+
+================================================================================
+8. CHANGE LOG (high level — doc synced with major edits)
+================================================================================
+  Last updated: April 2026 (cross-chat memory + LLM resilience + doc hygiene).
+  Per-user continuity (Postgres + prompt injection, not in-app LSTM/RNN training):
+    • chat/user_memory.py — extract_and_merge_memory, build_llm_user_context,
+      format_memory_for_prompt, build_account_snapshot.
+    • chat/views.py — wires memory extract + context into _send_message_payload
+      and llm_response_view.
+    • chat/langgraph_chat.py — ChatGraphState.memory_context; run_chat_graph and
+      generate node pass through to get_llm_response.
+    • chat/empathy_prompts.py — build_chat_system_prompt(..., memory_context).
+    • services/llm_service.py — get_llm_response(..., memory_context).
+
+  LLM stack hardening:
+    • Multi-key rotation (_load_keys) and broad model lists per provider;
+      OpenRouter system-message merge retry; structured error classification;
+      reverse-order retry in get_llm_response; actionable logging when all
+      providers fail.
+
+  Frontend auth robustness (recommended):
+    • Prefer clearing stale chat_demo when a valid access token exists so API
+      chat always runs for logged-in users.
 
 ================================================================================
 END OF doc.txt
