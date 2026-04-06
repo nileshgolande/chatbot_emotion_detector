@@ -1,4 +1,5 @@
-<img width="1890" height="860" alt="image" src="https://github.com/user-attachments/assets/8d29b066-fe63-4301-9d4d-01fcd9c8b8e1" /># Emotion Chat
+<img width="1908" height="859" alt="image" src="https://github.com/user-attachments/assets/0e2ddd5f-4ba2-408b-9b21-dbe0e47d41d3" />
+# Emotion Chat
 
 Full-stack **emotion-aware** chat: users talk in a WhatsApp-style UI while the backend classifies mood, stores analytics, and replies with an LLM tuned for empathy. Data lives in **PostgreSQL** (with **pgvector** for future vector search), caching and async work use **Redis**, and production serves the React app behind **nginx** with **Daphne** (ASGI).
 
