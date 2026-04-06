@@ -262,6 +262,8 @@ Aligns with the **“Local PC and Azure VM”** table above: same repo, venv at 
 - Empathy system prompt construction: `chat/empathy_prompts.py`
 <img width="1913" height="861" alt="image" src="https://github.com/user-attachments/assets/348321b9-35eb-4f0c-a157-3f15fdefe533" />
 <img width="1916" height="952" alt="image" src="https://github.com/user-attachments/assets/1f75f088-1936-467b-9374-58d4c237077c" />
+<img width="1916" height="945" alt="image" src="https://github.com/user-attachments/assets/c838f9a5-2f75-405f-8658-a94566c663b0" />
+
 
 -  <img width="1884" height="887" alt="image" src="https://github.com/user-attachments/assets/a6edc980-5d4a-4f64-8ba5-40fda3ce718c" />
 <img width="1915" height="919" alt="image" src="https://github.com/user-attachments/assets/54f3c3e4-228a-4df0-92a0-e6636ab28455" />
