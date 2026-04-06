@@ -1,0 +1,83 @@
+# Deploy to your Azure VM over SSH when you push to `main`.
+#
+# Setup (one-time):
+# 1) GitHub repo → Settings → Secrets and variables → Actions → Secrets:
+#    - SSH_HOST     = VM public IP or DNS (e.g. 20.123.45.67 or app.example.com)
+#    - SSH_USER     = Linux login (e.g. azureuser)
+#    - SSH_PRIVATE_KEY = full private key (PEM) that matches the VM's authorized_keys
+# 2) Actions → Variables (same page, Variables tab):
+#    - DEPLOY_ROOT  = absolute path to repo on the VM (e.g. /home/azureuser/chat_bot)
+#    - REACT_APP_API_URL = https://www.myemotionaichatbot.duckdns.org (no trailing slash)
+# 3) On the VM: clone repo once to DEPLOY_ROOT, create emotion_chat/.env, Docker
+#    for Postgres/Redis, nginx, systemd units — see project deploy docs.
+# 4) VM must allow GitHub SSH egress; deploy user needs passwordless sudo if you
+#    use the sample commands below that call sudo systemctl.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            ROOT="${{ vars.DEPLOY_ROOT }}"
+            if [ -z "$ROOT" ]; then
+              echo "Set repository variable DEPLOY_ROOT (e.g. /home/azureuser/chat_bot)"
+              exit 1
+            fi
+            API_PUBLIC_URL="${{ vars.REACT_APP_API_URL }}"
+            if [ -z "$API_PUBLIC_URL" ]; then
+              echo "Set repository variable REACT_APP_API_URL (e.g. https://www.myemotionaichatbot.duckdns.org)"
+              exit 1
+            fi
+
+            cd "$ROOT"
+            git fetch origin main
+            git checkout main
+            git pull origin main
+
+            # Backend
+            cd "$ROOT/emotion_chat"
+            source .venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            python manage.py migrate --noinput
+            python manage.py collectstatic --noinput
+
+            # Frontend (bakes REACT_APP_API_URL into the JS bundle)
+            cd "$ROOT/frontend"
+            npm ci
+            REACT_APP_API_URL="$API_PUBLIC_URL" npm run build
+
+            # Copy build to nginx web root — adjust TARGET_HTML to match your nginx `root`
+            TARGET_HTML="${{ vars.NGINX_HTML_ROOT }}"
+            if [ -z "$TARGET_HTML" ]; then
+              TARGET_HTML="/var/www/emotion-chat/html"
+            fi
+            sudo mkdir -p "$TARGET_HTML"
+            sudo rsync -a --delete build/ "$TARGET_HTML/"
+
+            # Restart app processes (create systemd units from deploy/systemd/*.example on the VM)
+            sudo systemctl restart daphne
+            sudo systemctl restart celery-worker || true
+            sudo systemctl reload nginx
+
+            echo "Deploy finished."

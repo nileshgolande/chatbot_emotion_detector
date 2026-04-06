@@ -5,19 +5,19 @@ import { CheckCheck, Lock, MessageCircle } from "lucide-react";
 const cards = [
   {
     title: "Emotion-aware replies",
-    body: "Your message is analyzed for emotion, and the assistant responds with warmth using a multi-LLM fallback chain (Gemini → Groq → OpenRouter).",
+    body: "Your message is analyzed for emotion, and the assistant responds with warmth, empathy, and understanding, offering supportive guidance and thoughtful insights tailored to your current mood and feelings.",
     Icon: CheckCheck,
     glow: true,
   },
   {
     title: "Mood analytics dashboard",
-    body: "Track dominant emotion, confidence, and trends from your chat history—so you can spot patterns over time.",
+    body: "Track dominant emotions, confidence levels, and trends from your chat history-gain insights into your emotional patterns over time, understand your mood shifts, and reflect on your personal growth.",
     Icon: MessageCircle,
     glow: false,
   },
   {
     title: "Journal insights",
-    body: "Write journal entries and (when Gemini is available) get gentle AI reflections. Works offline too with saved entries.",
+    body: "Write daily journal entries and receive thoughtful AI reflections, with all your entries safely saved for review and self-reflection over time.",
     Icon: Lock,
     glow: false,
   },

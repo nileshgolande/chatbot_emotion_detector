@@ -1,37 +1,70 @@
-# --- Python / Django ---
+# =============================================================================
+# chat_bot — Python (Django) + React frontend + Postgres/pgvector
+# =============================================================================
+
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+*.egg
+MANIFEST
+
+# Virtual environments (any common layout)
 venv/
 .venv/
 env/
-*.egg-info/
-.eggs/
-dist/
-build/
-*.egg
+ENV/
+.virtualenv/
 
-# Django
+# Packaging / local build artifacts (not frontend/build — see Node section)
+*.manifest
+
+# --- Django ---
 *.log
 local_settings.py
 db.sqlite3
 *.sqlite3
+*.db-journal
 staticfiles/
 media/
+
+# Per-app static/media roots (emotion_chat project lives under ./emotion_chat/)
 emotion_chat/staticfiles/
 emotion_chat/media/
 
-# Secrets (keep .env.example tracked)
+# Django / test caches
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+
+# Celery
+celerybeat-schedule
+celerybeat-schedule.*
+
+# --- Secrets & env ---
 .env
 .env.*
 !.env.example
+!**/.env.example
+!.env.production.example
+!**/.env.production.example
+*.local
 
-# --- Node / React (frontend) ---
+# --- Node / React (CRA under frontend/) ---
 frontend/node_modules/
 frontend/build/
+frontend/dist/
 frontend/coverage/
+frontend/.eslintcache
 frontend/.env.local
 frontend/.env.development.local
 frontend/.env.test.local
@@ -42,22 +75,46 @@ yarn-error.log*
 .pnp
 .pnp.js
 
-# --- OS & editors ---
+# If you add a root-level tooling package.json later
+node_modules/
+
+# --- ML / Hugging Face (often created next to project during dev) ---
+.cache/
+*.pt
+*.bin
+# Uncomment if large checkpoints should never be committed:
+# *.safetensors
+
+# --- Docker & local DB volumes (never commit data dirs) ---
+docker-compose.override.yml
+pgdata*/
+*.pid
+
+# --- OS ---
 .DS_Store
+.AppleDouble
+.LSOverride
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Editors & IDEs ---
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
 *.swp
 *.swo
 *~
-.idea/
-.vscode/
-*.sublime-*
+*.orig
 
-# --- Testing / coverage ---
-.coverage
-htmlcov/
-.pytest_cache/
+# --- Type checkers / linters (if added later) ---
 .mypy_cache/
+.ruff_cache/
+.dmypy.json
 
-# --- Misc ---
+# --- Misc backups ---
 *.bak
-.cache/
+*.tmp
+*.temp

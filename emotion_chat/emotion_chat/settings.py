@@ -78,6 +78,11 @@ TEMPLATES = [
 WSGI_APPLICATION = "emotion_chat.wsgi.application"
 ASGI_APPLICATION = "emotion_chat.asgi.application"
 
+_db_options = {}
+_db_sslmode = (config("DB_SSLMODE", default="") or "").strip()
+if _db_sslmode:
+    _db_options["sslmode"] = _db_sslmode
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
@@ -86,6 +91,7 @@ DATABASES = {
         "PASSWORD": config("DB_PASSWORD", default="emotion"),
         "HOST": config("DB_HOST", default="localhost"),
         "PORT": config("DB_PORT", default="5432"),
+        **({"OPTIONS": _db_options} if _db_options else {}),
     }
 }
 
@@ -195,6 +201,12 @@ EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@localhost")
 
 # --- Security (production) ---
+# nginx (or another reverse proxy) terminates TLS → set TRUST_PROXY_SSL=1 and forward
+# X-Forwarded-Proto / Host so Django sees secure cookies and correct host.
+if not DEBUG and config("TRUST_PROXY_SSL", default=False, cast=bool):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = config("USE_X_FORWARDED_HOST", default=True, cast=bool)
+
 if not DEBUG:
     SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=False, cast=bool)
     SESSION_COOKIE_SECURE = True
