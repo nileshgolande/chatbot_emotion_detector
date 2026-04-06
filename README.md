@@ -36,7 +36,8 @@ Full-stack **emotion-aware** chat: users talk in a WhatsApp-style UI while the b
 
 ```text
 chat_bot/
-├── emotion_chat/                 # Django project root (venv + pip here)
+├── .venv/                        # Python venv (recommended: create at repo root — matches Azure VM layout)
+├── emotion_chat/                 # Django app root (manage.py lives here)
 │   ├── manage.py
 │   ├── .env                      # local secrets (gitignored); copy from .env.example
 │   ├── requirements.txt
@@ -58,8 +59,26 @@ chat_bot/
 │   ├── .env.production.example # REACT_APP_API_URL for production builds
 │   └── package.json
 ├── deploy/                     # nginx site + systemd unit *examples* (paths need editing)
+├── scripts/                    # optional local helpers (e.g. dev-local.ps1 on Windows)
 └── .github/workflows/          # CI (migrations, frontend build) + optional SSH deploy
 ```
+
+### Local PC and Azure VM — same project layout
+
+The code in this repo is the single source of truth. **Only the absolute path to the clone differs** (e.g. Windows `C:\Users\pradi\Downloads\NILESH\chat_bot` vs Linux `/home/azureuser/chatbot_emotion_detector`). Everything below should match between your machine and the VM:
+
+| | **VM (production)** | **Local PC (development)** |
+|---|---------------------|----------------------------|
+| **Repo root** | `$DEPLOY_ROOT` (GitHub variable; e.g. `/home/azureuser/chatbot_emotion_detector`) | Your clone folder, e.g. `...\chat_bot` |
+| **Python venv** | `$DEPLOY_ROOT/.venv` | **Same:** `.venv` next to `emotion_chat/` and `frontend/` |
+| **Install deps** | `pip install -r emotion_chat/requirements.txt` (venv activated) | Same |
+| **Django / `.env`** | `emotion_chat/manage.py` and `emotion_chat/.env` | Same paths |
+| **Postgres + Redis** | Docker or host install; `DB_*` + `REDIS_URL` in `.env` | `cd emotion_chat` → `docker compose up -d` (see `emotion_chat/docker-compose.yml`) |
+| **ASGI process** | **Daphne** on `127.0.0.1:8000`, **systemd** from `deploy/systemd/daphne.service.example` | `runserver` or `daphne -b 127.0.0.1 -p 8000 emotion_chat.asgi:application` from `emotion_chat/` |
+| **Frontend dev** | Built on deploy: `REACT_APP_API_URL` = public site URL | `npm start` in `frontend/`; CRA **proxy** → `http://127.0.0.1:8000` |
+| **nginx (VM only)** | SPA `root` e.g. `/var/www/emotion-chat/html`; **`/static/js/`** and **`/static/css/`** from the React **build** must be configured **before** Django’s **`/static/`** (see `deploy/nginx/myemotionaichatbot.duckdns.org.conf`) | Not required locally unless you test nginx on WSL |
+
+**Production URL:** [https://www.myemotionaichatbot.duckdns.org](https://www.myemotionaichatbot.duckdns.org) — set `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, and `CSRF_TRUSTED_ORIGINS` in `emotion_chat/.env` to include this host (see `emotion_chat/.env.example`).
 
 ---
 
@@ -178,20 +197,40 @@ Frontend production build: copy **`frontend/.env.production.example`** → **`fr
 
 ## Local development
 
-**Backend**
+Use the **same tree as the VM**: open your **repository root** (folder that contains `emotion_chat/` and `frontend/`), not only the inner `emotion_chat` folder.
+
+**1. Postgres + Redis (same stack as `docker compose` on a typical VM)**
+
+From `emotion_chat/`:
 
 ```bash
-cd emotion_chat
-python -m venv .venv
-.venv\Scripts\activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-# Copy .env.example → .env and edit (Postgres must be running)
-python manage.py migrate
-python manage.py runserver
-# For Channels features as in production: use daphne (see deploy docs)
+docker compose up -d
 ```
 
-**Frontend**
+**2. Backend — venv at repo root (same as VM: `$DEPLOY_ROOT/.venv`)**
+
+```bash
+cd chat_bot                    # your repo root (name may differ, e.g. chat_bot)
+python -m venv .venv
+# Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+# Windows cmd:
+#   .venv\Scripts\activate.bat
+# Linux/macOS:
+#   source .venv/bin/activate
+
+pip install -r emotion_chat/requirements.txt
+cd emotion_chat
+copy .env.example .env        # Windows: or `cp` on Linux; edit DB_* / REDIS_URL / keys
+python manage.py migrate
+python manage.py runserver
+```
+
+For ASGI parity with production: `daphne -b 127.0.0.1 -p 8000 emotion_chat.asgi:application` from `emotion_chat/` with the same venv activated.
+
+**Optional (Windows):** `scripts\dev-local.ps1` creates/uses `.\.venv`, installs deps, and starts `runserver` if Docker is already up.
+
+**3. Frontend**
 
 ```bash
 cd frontend
@@ -199,23 +238,25 @@ npm ci
 npm start
 ```
 
-CRA **`proxy`** forwards `/api` to the Django dev server. **Machine learning models** download on first use (Hugging Face / sentence-transformers); ensure disk and network allow that.
+CRA **`proxy`** forwards `/api` to `http://127.0.0.1:8000`. **Machine learning models** download on first use (Hugging Face / sentence-transformers); ensure disk and network allow that.
 
 ---
 
 ## Production (Azure VM + DuckDNS)
 
+Aligns with the **“Local PC and Azure VM”** table above: same repo, venv at **`$DEPLOY_ROOT/.venv`**, **`emotion_chat/.env`**, Daphne + nginx.
+
 1. **DNS:** Point **DuckDNS** at the VM; support **www** and apex if you use both.
 2. **TLS:** e.g. `certbot --nginx -d www.myemotionaichatbot.duckdns.org -d myemotionaichatbot.duckdns.org`
-3. **Postgres + Redis** on the VM or managed services; fill `emotion_chat/.env`.
-4. **Static/media:** `collectstatic`; nginx `alias` paths for `STATIC_ROOT` and `MEDIA_ROOT` (see `deploy/nginx/` — replace **`REPLACE_USER`** placeholders).
-5. **Processes:** **Daphne** on `127.0.0.1:8000` (or socket), **Celery worker** optional/required depending on tasks you enable; **systemd** examples under `deploy/systemd/`.
-6. **Frontend:** `npm run build` with `REACT_APP_API_URL` set; deploy `frontend/build/` to the directory nginx serves as `root`.
+3. **Postgres + Redis** on the VM or managed services; fill `emotion_chat/.env` (same keys as locally; production uses `DEBUG=False`, `TRUST_PROXY_SSL=1` behind nginx).
+4. **Static/media:** `collectstatic`; nginx `alias` paths for `STATIC_ROOT` and `MEDIA_ROOT` (see `deploy/nginx/` — replace **`REPLACE_USER`** with your Linux user). Serve **CRA** `/static/js/` and `/static/css/` from the **React build** before Django’s `/static/` (see `deploy/nginx/myemotionaichatbot.duckdns.org.conf`).
+5. **Processes:** **Daphne** on `127.0.0.1:8000`; **systemd** units use **`$DEPLOY_ROOT/.venv`** — see `deploy/systemd/daphne.service.example` (adjust **`REPLACE_USER`** and **`chat_bot`** to your clone directory name). **Celery** optional; see `deploy/systemd/celery-worker.service.example`.
+6. **Frontend:** `npm run build` with `REACT_APP_API_URL=https://www.myemotionaichatbot.duckdns.org`; deploy `frontend/build/` to nginx `root` (e.g. `/var/www/emotion-chat/html`).
 
 ### GitHub Actions deploy
 
-Repository **variables:** `DEPLOY_ROOT`, `REACT_APP_API_URL` (e.g. `https://www.myemotionaichatbot.duckdns.org`), optional `NGINX_HTML_ROOT`.  
-**Secrets:** `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`. See `.github/workflows/deploy.yml`.
+Repository **variables:** **`DEPLOY_ROOT`** = absolute path to the repo **on the VM** (must match where you `git clone`, e.g. `/home/azureuser/chatbot_emotion_detector`), **`REACT_APP_API_URL`** = `https://www.myemotionaichatbot.duckdns.org` (no trailing slash), optional **`NGINX_HTML_ROOT`**.  
+**Secrets:** `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`. The workflow activates **`$DEPLOY_ROOT/.venv`** and runs migrate/collectstatic/build/rsync — see `.github/workflows/deploy.yml`.
 
 ---
 

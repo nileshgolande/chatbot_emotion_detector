@@ -9,8 +9,8 @@ Type=simple
 User=REPLACE_USER
 Group=REPLACE_USER
 WorkingDirectory=/home/REPLACE_USER/chat_bot/emotion_chat
-Environment=PATH=/home/REPLACE_USER/chat_bot/emotion_chat/.venv/bin
-ExecStart=/home/REPLACE_USER/chat_bot/emotion_chat/.venv/bin/celery \
+Environment=PATH=/home/REPLACE_USER/chat_bot/.venv/bin
+ExecStart=/home/REPLACE_USER/chat_bot/.venv/bin/celery \
     -A emotion_chat worker -l info
 Restart=always
 RestartSec=3

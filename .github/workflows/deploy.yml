@@ -6,10 +6,11 @@
 #    - SSH_USER     = Linux login (e.g. azureuser)
 #    - SSH_PRIVATE_KEY = full private key (PEM) that matches the VM's authorized_keys
 # 2) Actions → Variables (same page, Variables tab):
-#    - DEPLOY_ROOT  = absolute path to repo on the VM (e.g. /home/azureuser/chat_bot)
+#    - DEPLOY_ROOT  = absolute path to repo on the VM (e.g. /home/azureuser/chatbot_emotion_detector)
 #    - REACT_APP_API_URL = https://www.myemotionaichatbot.duckdns.org (no trailing slash)
-# 3) On the VM: clone repo once to DEPLOY_ROOT, create emotion_chat/.env, Docker
-#    for Postgres/Redis, nginx, systemd units — see project deploy docs.
+# 3) On the VM: clone repo once to DEPLOY_ROOT, create emotion_chat/.env, Python
+#    venv at DEPLOY_ROOT/.venv (same layout as this repo), Docker for Postgres/Redis,
+#    nginx, systemd units — see README and deploy/.
 # 4) VM must allow GitHub SSH egress; deploy user needs passwordless sudo if you
 #    use the sample commands below that call sudo systemctl.
 
@@ -40,7 +41,7 @@ jobs:
             set -euo pipefail
             ROOT="${{ vars.DEPLOY_ROOT }}"
             if [ -z "$ROOT" ]; then
-              echo "Set repository variable DEPLOY_ROOT (e.g. /home/azureuser/chat_bot)"
+              echo "Set repository variable DEPLOY_ROOT (e.g. /home/azureuser/chatbot_emotion_detector)"
               exit 1
             fi
             API_PUBLIC_URL="${{ vars.REACT_APP_API_URL }}"
@@ -54,9 +55,13 @@ jobs:
             git checkout main
             git pull origin main
 
-            # Backend
+            if [ ! -x "$ROOT/.venv/bin/python" ]; then
+              python3 -m venv "$ROOT/.venv"
+            fi
+
+            # Backend (venv at repo root — same as Azure VM layout)
             cd "$ROOT/emotion_chat"
-            source .venv/bin/activate
+            source "$ROOT/.venv/bin/activate"
             pip install --upgrade pip
             pip install -r requirements.txt
             python manage.py migrate --noinput

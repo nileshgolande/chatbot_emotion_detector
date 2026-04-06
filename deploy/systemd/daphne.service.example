@@ -1,5 +1,5 @@
 # /etc/systemd/system/daphne.service
-# Replace User, WorkingDirectory, paths to venv and project.
+# Replace User and every path segment: clone folder may be chat_bot, chatbot_emotion_detector, etc.
 
 [Unit]
 Description=Daphne ASGI (Emotion Chat)
@@ -10,8 +10,8 @@ Type=simple
 User=REPLACE_USER
 Group=REPLACE_USER
 WorkingDirectory=/home/REPLACE_USER/chat_bot/emotion_chat
-Environment=PATH=/home/REPLACE_USER/chat_bot/emotion_chat/.venv/bin
-ExecStart=/home/REPLACE_USER/chat_bot/emotion_chat/.venv/bin/daphne \
+Environment=PATH=/home/REPLACE_USER/chat_bot/.venv/bin
+ExecStart=/home/REPLACE_USER/chat_bot/.venv/bin/daphne \
     -b 127.0.0.1 -p 8000 emotion_chat.asgi:application
 Restart=always
 RestartSec=3
