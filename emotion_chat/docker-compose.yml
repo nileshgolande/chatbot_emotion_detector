@@ -10,5 +10,14 @@ services:
     volumes:
       - pgdata_emotion:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_emotion:/data
+
 volumes:
   pgdata_emotion:
+  redis_emotion:
