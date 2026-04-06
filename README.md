@@ -15,7 +15,6 @@ Full-stack **emotion-aware** chat: users talk in a WhatsApp-style UI while the b
 - **Long-term memory** — Lightweight rules extract names and “remember that …” facts into `UserChatMemory` so the LLM gets consistent context across chats.
 - **Dashboard** — Aggregates emotion stats, mood trends, timelines, and weekly/monthly reports from stored analyses.
 - **Journal** — Entries and AI-backed insights over time (see `journal/`).
-- **Guest demo** — Visitors without JWTs can use a **local demo** chat (no server); signing in switches to real API-backed threads.
 
 ---
 
