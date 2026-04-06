@@ -261,6 +261,7 @@ Aligns with the **“Local PC and Azure VM”** table above: same repo, venv at 
 - Seed data (optional): `chat/management/commands/seed_demo_data.py`
 - Empathy system prompt construction: `chat/empathy_prompts.py`
 <img width="1913" height="861" alt="image" src="https://github.com/user-attachments/assets/348321b9-35eb-4f0c-a157-3f15fdefe533" />
+<img width="1916" height="952" alt="image" src="https://github.com/user-attachments/assets/1f75f088-1936-467b-9374-58d4c237077c" />
 
 -  <img width="1884" height="887" alt="image" src="https://github.com/user-attachments/assets/a6edc980-5d4a-4f64-8ba5-40fda3ce718c" />
 <img width="1915" height="919" alt="image" src="https://github.com/user-attachments/assets/54f3c3e4-228a-4df0-92a0-e6636ab28455" />
@@ -268,6 +269,4 @@ Aligns with the **“Local PC and Azure VM”** table above: same repo, venv at 
 ![Uploading image.png…]()
 
 
-
-- <img width="1031" height="991" alt="image" src="https://github.com/user-attachments/assets/7fc784c4-7c82-498a-a0b7-1a58cb54f123" />
 
