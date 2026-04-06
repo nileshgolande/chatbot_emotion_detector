@@ -253,21 +253,3 @@ Aligns with the **“Local PC and Azure VM”** table above: same repo, venv at 
 5. **Processes:** **Daphne** on `127.0.0.1:8000`; **systemd** units use **`$DEPLOY_ROOT/.venv`** — see `deploy/systemd/daphne.service.example` (adjust **`REPLACE_USER`** and **`chat_bot`** to your clone directory name). **Celery** optional; see `deploy/systemd/celery-worker.service.example`.
 6. **Frontend:** `npm run build` with `REACT_APP_API_URL=https://www.myemotionaichatbot.duckdns.org`; deploy `frontend/build/` to nginx `root` (e.g. `/var/www/emotion-chat/html`).
 
-### GitHub Actions deploy
-
-Repository **variables:** **`DEPLOY_ROOT`** = absolute path to the repo **on the VM** (must match where you `git clone`, e.g. `/home/azureuser/chatbot_emotion_detector`), **`REACT_APP_API_URL`** = `https://www.myemotionaichatbot.duckdns.org` (no trailing slash), optional **`NGINX_HTML_ROOT`**.  
-**Secrets:** `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`. The workflow activates **`$DEPLOY_ROOT/.venv`** and runs migrate/collectstatic/build/rsync — see `.github/workflows/deploy.yml`.
-
----
-
-## CI
-
-`.github/workflows/ci.yml` runs backend checks (e.g. migrations) and builds the frontend so pull requests stay deployable.
-
----
-
-## Further reading in the repo
-
-- Emotion emoji mapping: `emotion_chat/emotions/emotion_emojis.py`
-- Seed data (optional): `chat/management/commands/seed_demo_data.py`
-- Empathy system prompt construction: `chat/empathy_prompts.py`
