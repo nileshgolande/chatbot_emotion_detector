@@ -1,0 +1,86 @@
+# Continuous Integration: tests Django against Postgres + builds the React app.
+# Required: none (uses ephemeral DB). Push to any branch or open PR.
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: emotion
+          POSTGRES_PASSWORD: emotion
+          POSTGRES_DB: emotion_chat_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U emotion -d emotion_chat_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: emotion_chat
+
+    env:
+      SECRET_KEY: ci-not-for-production-change-me
+      DEBUG: "True"
+      DB_NAME: emotion_chat_ci
+      DB_USER: emotion
+      DB_PASSWORD: emotion
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      REDIS_URL: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: emotion_chat/requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Django system check
+        run: python manage.py check
+
+      - name: Apply migrations
+        run: python manage.py migrate --noinput
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and build
+        env:
+          # CRA bakes this at build time; CI uses a placeholder (real value on deploy).
+          REACT_APP_API_URL: https://example.com
+        run: |
+          npm ci
+          npm run build

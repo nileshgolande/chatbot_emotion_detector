@@ -1,0 +1,19 @@
+# /etc/systemd/system/celery-worker.service
+
+[Unit]
+Description=Celery worker (Emotion Chat)
+After=network.target redis.service postgresql.service
+
+[Service]
+Type=simple
+User=REPLACE_USER
+Group=REPLACE_USER
+WorkingDirectory=/home/REPLACE_USER/chat_bot/emotion_chat
+Environment=PATH=/home/REPLACE_USER/chat_bot/emotion_chat/.venv/bin
+ExecStart=/home/REPLACE_USER/chat_bot/emotion_chat/.venv/bin/celery \
+    -A emotion_chat worker -l info
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
