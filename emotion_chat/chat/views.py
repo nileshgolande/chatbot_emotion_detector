@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from emotions.emotion_detector import emotion_detector
 from emotions.models import EmotionAnalysis
 from .langgraph_chat import run_chat_graph
+from .user_memory import build_llm_user_context, extract_and_merge_memory
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,9 @@ def _send_message_payload(request, conv: Conversation, content: str) -> dict:
         lambda: threading.Thread(target=_refresh_daily_mood, daemon=True).start()
     )
 
+    extract_and_merge_memory(request.user, content)
+    memory_ctx = build_llm_user_context(request.user)
+
     prior = list(
         conv.messages.exclude(pk=user_msg.pk).order_by("-created_at")[:5]
     )
@@ -72,6 +76,7 @@ def _send_message_payload(request, conv: Conversation, content: str) -> dict:
         content,
         analysis.get("primary_emotion"),
         history=prior,
+        memory_context=memory_ctx,
     )
     Message.objects.create(conversation=conv, sender="bot", content=reply)
 
@@ -108,8 +113,16 @@ def llm_response_view(request):
     if not user_input:
         return Response({"detail": "message required"}, status=status.HTTP_400_BAD_REQUEST)
     analysis = emotion_detector.detect_emotion(user_input)
+    extract_and_merge_memory(request.user, user_input)
+    memory_ctx = build_llm_user_context(request.user)
     return Response(
-        {"response": run_chat_graph(user_input, analysis.get("primary_emotion"))}
+        {
+            "response": run_chat_graph(
+                user_input,
+                analysis.get("primary_emotion"),
+                memory_context=memory_ctx,
+            )
+        }
     )
 
 

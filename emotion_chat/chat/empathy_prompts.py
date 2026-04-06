@@ -44,13 +44,25 @@ def chat_api_hard_rules() -> str:
     )
 
 
-def build_chat_system_prompt(primary_emotion: str | None) -> str:
+def build_chat_system_prompt(
+    primary_emotion: str | None,
+    memory_context: str | None = None,
+) -> str:
     """Full system prompt for HTTP chat (OpenRouter / Gemini / Groq)."""
     pe = (primary_emotion or "neutral").strip() or "neutral"
+    mem = (memory_context or "").strip()
+    mem_block = (
+        "\nUser-specific context (stored in this app for this logged-in user — use for continuity and when they ask what you know or for their stats):\n"
+        + mem
+        + "\n"
+        if mem
+        else ""
+    )
     return (
         empathy_core_instructions()
         + f"\nFor this turn, lean into this emotional tone (hint from their message): {pe}.\n"
         + f"Emotion-focused guidance:\n{emotion_guidance(pe)}\n"
+        + mem_block
         + chat_api_hard_rules()
     )
 
