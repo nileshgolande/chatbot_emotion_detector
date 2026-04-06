@@ -1,4 +1,5 @@
-<img width="1908" height="859" alt="image" src="https://github.com/user-attachments/assets/0e2ddd5f-4ba2-408b-9b21-dbe0e47d41d3" />
+<img width="1893" height="846" alt="image" src="https://github.com/user-attachments/assets/731768d7-2cdb-4014-ae97-302fdbc76823" />
+
 # Emotion Chat
 
 Full-stack **emotion-aware** chat: users talk in a WhatsApp-style UI while the backend classifies mood, stores analytics, and replies with an LLM tuned for empathy. Data lives in **PostgreSQL** (with **pgvector** for future vector search), caching and async work use **Redis**, and production serves the React app behind **nginx** with **Daphne** (ASGI).
@@ -259,3 +260,14 @@ Aligns with the **“Local PC and Azure VM”** table above: same repo, venv at 
 - Emotion emoji mapping: `emotion_chat/emotions/emotion_emojis.py`
 - Seed data (optional): `chat/management/commands/seed_demo_data.py`
 - Empathy system prompt construction: `chat/empathy_prompts.py`
+<img width="1913" height="861" alt="image" src="https://github.com/user-attachments/assets/348321b9-35eb-4f0c-a157-3f15fdefe533" />
+
+-  <img width="1884" height="887" alt="image" src="https://github.com/user-attachments/assets/a6edc980-5d4a-4f64-8ba5-40fda3ce718c" />
+<img width="1915" height="919" alt="image" src="https://github.com/user-attachments/assets/54f3c3e4-228a-4df0-92a0-e6636ab28455" />
+<img width="1539" height="1023" alt="image" src="https://github.com/user-attachments/assets/871739ea-598e-4b1a-89ac-7a8ba7661a96" />
+![Uploading image.png…]()
+
+
+
+- <img width="1031" height="991" alt="image" src="https://github.com/user-attachments/assets/7fc784c4-7c82-498a-a0b7-1a58cb54f123" />
+
