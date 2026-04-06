@@ -1,4 +1,4 @@
-# Emotion Chat
+<img width="1890" height="860" alt="image" src="https://github.com/user-attachments/assets/8d29b066-fe63-4301-9d4d-01fcd9c8b8e1" /># Emotion Chat
 
 Full-stack **emotion-aware** chat: users talk in a WhatsApp-style UI while the backend classifies mood, stores analytics, and replies with an LLM tuned for empathy. Data lives in **PostgreSQL** (with **pgvector** for future vector search), caching and async work use **Redis**, and production serves the React app behind **nginx** with **Daphne** (ASGI).
 
@@ -21,7 +21,7 @@ Full-stack **emotion-aware** chat: users talk in a WhatsApp-style UI while the b
 
 | Area | Choices |
 |------|---------|
-| Backend | Django 5, Django REST Framework, **SimpleJWT** (access + refresh, rotation + blacklist) |
+| Backend | Django, Django REST Framework, **SimpleJWT** (access + refresh, rotation + blacklist) |
 | Realtime | **Daphne** + **Django Channels** (ASGI); **Redis** channel layer when `REDIS_URL` is set; WebSocket routes are currently empty placeholders |
 | Database | **PostgreSQL** + **pgvector** (Django ORM integration) |
 | Cache / broker | **Redis** via `django-redis` (optional); **Celery** for background tasks |
@@ -252,19 +252,6 @@ Aligns with the **“Local PC and Azure VM”** table above: same repo, venv at 
 4. **Static/media:** `collectstatic`; nginx `alias` paths for `STATIC_ROOT` and `MEDIA_ROOT` (see `deploy/nginx/` — replace **`REPLACE_USER`** with your Linux user). Serve **CRA** `/static/js/` and `/static/css/` from the **React build** before Django’s `/static/` (see `deploy/nginx/myemotionaichatbot.duckdns.org.conf`).
 5. **Processes:** **Daphne** on `127.0.0.1:8000`; **systemd** units use **`$DEPLOY_ROOT/.venv`** — see `deploy/systemd/daphne.service.example` (adjust **`REPLACE_USER`** and **`chat_bot`** to your clone directory name). **Celery** optional; see `deploy/systemd/celery-worker.service.example`.
 6. **Frontend:** `npm run build` with `REACT_APP_API_URL=https://www.myemotionaichatbot.duckdns.org`; deploy `frontend/build/` to nginx `root` (e.g. `/var/www/emotion-chat/html`).
-
-### GitHub Actions deploy
-
-Repository **variables:** **`DEPLOY_ROOT`** = absolute path to the repo **on the VM** (must match where you `git clone`, e.g. `/home/azureuser/chatbot_emotion_detector`), **`REACT_APP_API_URL`** = `https://www.myemotionaichatbot.duckdns.org` (no trailing slash), optional **`NGINX_HTML_ROOT`**.  
-**Secrets:** `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`. The workflow activates **`$DEPLOY_ROOT/.venv`** and runs migrate/collectstatic/build/rsync — see `.github/workflows/deploy.yml`.
-
----
-
-## CI
-
-`.github/workflows/ci.yml` runs backend checks (e.g. migrations) and builds the frontend so pull requests stay deployable.
-
----
 
 ## Further reading in the repo
 
