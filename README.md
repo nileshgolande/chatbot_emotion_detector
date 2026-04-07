@@ -177,7 +177,7 @@ flowchart LR
 
 - **Routing** (`App.js`): public `/`, `/login`, `/register`, `/chat`; protected `/journal`, `/dashboard`.
 - **API client** (`services/api.js`): `baseURL` from `REACT_APP_API_URL` (empty in dev = same-origin + CRA **proxy** to `http://127.0.0.1:8000`). Attaches JWT and handles refresh.
-- **Auth** (`AuthContext`, `useAuth`): stores tokens in **localStorage**; **demo user** path for `/chat` without backend (`ChatPage.jsx` + `enableDemoUser`).
+- **Auth** (`AuthContext`, `useAuth`): stores tokens in **localStorage**; 
 - **UI:** WhatsApp-inspired chat (`ChatInterface`, `MessageList`, …), landing components (`Aero*`), dashboard charts (**Recharts**), theme toggle (**ThemeContext**).
 
 ---
@@ -264,10 +264,10 @@ Aligns with the **“Local PC and Azure VM”** table above: same repo, venv at 
 <img width="1916" height="945" alt="image" src="https://github.com/user-attachments/assets/c838f9a5-2f75-405f-8658-a94566c663b0" />
 
 
--  <img width="1884" height="887" alt="image" src="https://github.com/user-attachments/assets/a6edc980-5d4a-4f64-8ba5-40fda3ce718c" />
+<img width="1884" height="887" alt="image" src="https://github.com/user-attachments/assets/a6edc980-5d4a-4f64-8ba5-40fda3ce718c" />
 <img width="1915" height="919" alt="image" src="https://github.com/user-attachments/assets/54f3c3e4-228a-4df0-92a0-e6636ab28455" />
 <img width="1539" height="1023" alt="image" src="https://github.com/user-attachments/assets/871739ea-598e-4b1a-89ac-7a8ba7661a96" />
-![Uploading image.png…]()
+
 
 
 
