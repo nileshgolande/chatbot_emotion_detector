@@ -4,7 +4,6 @@
 
 Full-stack **emotion-aware** chat: users talk in a WhatsApp-style UI while the backend classifies mood, stores analytics, and replies with an LLM tuned for empathy. Data lives in **PostgreSQL** (with **pgvector** for future vector search), caching and async work use **Redis**, and production serves the React app behind **nginx** with **Daphne** (ASGI).
 
-**Production URL (when configured):** [https://www.myemotionaichatbot.duckdns.org](https://www.myemotionaichatbot.duckdns.org)
 
 ---
 
